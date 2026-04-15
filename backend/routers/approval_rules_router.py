@@ -112,3 +112,54 @@ async def evaluate_approval(transaction_type: str, amount: float = 0, outlet_id:
         "matching_rules": matching_rules,
         "auto_approved": not needs_approval,
     }
+
+
+# ===================== DELEGATION =====================
+class DelegationRequest(BaseModel):
+    delegator_id: str  # user going on leave
+    delegate_id: str   # user taking over
+    start_date: str
+    end_date: str
+    reason: Optional[str] = ""
+
+@router.get("/delegations")
+async def list_delegations(current_user: dict = Depends(get_current_user)):
+    """List active approval delegations"""
+    from database import db
+    delegations_col = db["approval_delegations"]
+    delegations = []
+    async for d in delegations_col.find({"active": True}).sort("created_at", -1):
+        doc = serialize_doc(d)
+        delegator = await users_col.find_one({"_id": ObjectId(d["delegator_id"])})
+        delegate = await users_col.find_one({"_id": ObjectId(d["delegate_id"])})
+        doc["delegator_name"] = delegator.get("name", "") if delegator else ""
+        doc["delegate_name"] = delegate.get("name", "") if delegate else ""
+        delegations.append(doc)
+    return {"delegations": delegations}
+
+@router.post("/delegations")
+async def create_delegation(req: DelegationRequest, current_user: dict = Depends(get_current_user)):
+    await check_permission(current_user, "approvals.approve")
+    from database import db
+    delegations_col = db["approval_delegations"]
+    
+    doc = {
+        "delegator_id": req.delegator_id,
+        "delegate_id": req.delegate_id,
+        "start_date": req.start_date,
+        "end_date": req.end_date,
+        "reason": req.reason,
+        "active": True,
+        "created_by": current_user["id"],
+        "created_at": now_utc(),
+    }
+    result = await delegations_col.insert_one(doc)
+    await log_audit(current_user["id"], "create", "approvals", "delegation", str(result.inserted_id), details=f"Delegation: {req.delegator_id} → {req.delegate_id}")
+    return {"id": str(result.inserted_id), "message": "Delegation created"}
+
+@router.delete("/delegations/{delegation_id}")
+async def revoke_delegation(delegation_id: str, current_user: dict = Depends(get_current_user)):
+    from database import db
+    delegations_col = db["approval_delegations"]
+    await delegations_col.update_one({"_id": ObjectId(delegation_id)}, {"$set": {"active": False}})
+    return {"message": "Delegation revoked"}

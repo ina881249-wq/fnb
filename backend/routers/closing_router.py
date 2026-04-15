@@ -179,6 +179,49 @@ async def override_closing(outlet_id: str, date: str, req: ClosingActionRequest,
     await log_audit(current_user["id"], "override", "operations", "daily_closing", str(closing["_id"]), details=f"Override locked day {date}: {req.comment}")
     return {"message": "Day reopened via override"}
 
+@router.post("/reopen-request")
+async def request_reopen(outlet_id: str, date: str, req: ClosingActionRequest, current_user: dict = Depends(get_current_user)):
+    """Request to reopen a locked day (creates an approval request)"""
+    await check_outlet_access(current_user, outlet_id)
+    
+    closing = await daily_closings_col.find_one({"outlet_id": outlet_id, "date": date})
+    if not closing:
+        raise HTTPException(status_code=404, detail="No closing record found")
+    if closing["status"] not in ["locked", "approved"]:
+        raise HTTPException(status_code=400, detail=f"Cannot request reopen: status is {closing['status']}")
+    
+    if not req.comment:
+        raise HTTPException(status_code=400, detail="Reason for reopen is required")
+    
+    # Create approval request
+    from database import approvals_col
+    approval_doc = {
+        "type": "reopen_closing",
+        "module": "operations",
+        "description": f"Request to reopen closing for {date}: {req.comment}",
+        "data": {"outlet_id": outlet_id, "date": date, "closing_id": str(closing["_id"])},
+        "outlet_id": outlet_id,
+        "amount": None,
+        "requester_id": current_user["id"],
+        "approver_ids": [],
+        "status": "pending",
+        "comments": [],
+        "created_at": now_utc(),
+        "updated_at": now_utc(),
+    }
+    result = await approvals_col.insert_one(approval_doc)
+    
+    # Update closing status
+    await daily_closings_col.update_one(
+        {"_id": closing["_id"]},
+        {"$set": {"reopen_requested": True, "reopen_reason": req.comment, "reopen_requested_by": current_user["id"], "reopen_requested_at": now_utc(), "updated_at": now_utc()}}
+    )
+    
+    await log_audit(current_user["id"], "reopen_request", "operations", "daily_closing", str(closing["_id"]), details=f"Reopen request for {date}: {req.comment}")
+    await ws_manager.broadcast_all({"type": "reopen_requested", "outlet_id": outlet_id, "date": date})
+    return {"approval_id": str(result.inserted_id), "message": "Reopen request submitted for approval"}
+
+
 @router.get("/monitor")
 async def closing_monitor(current_user: dict = Depends(get_current_user), date: str = ""):
     """Get closing status for all outlets for a given date (management view)"""

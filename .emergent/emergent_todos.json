@@ -1,6 +1,6 @@
 [
   {
-    "content": "Sprint A1: Reusable DataTable component (pagination/search/filter/sort/bulk)",
+    "content": "Sprint A1: Reusable DataTable component",
     "status": "completed"
   },
   {
@@ -8,19 +8,43 @@
     "status": "completed"
   },
   {
-    "content": "Sprint A3: Apply DataTable to ALL list pages",
-    "status": "pending"
-  },
-  {
-    "content": "Sprint A4: Outlet Task Home (task-oriented dashboard)",
+    "content": "Sprint A3: DataTable applied to Audit Trail + Approvals (with bulk approve)",
     "status": "completed"
   },
   {
-    "content": "Sprint A5: Saved Views & Preset Filters",
+    "content": "Sprint A4: Outlet Task Home",
+    "status": "completed"
+  },
+  {
+    "content": "Sprint B1: Journal clone + batch post + templates API",
+    "status": "completed"
+  },
+  {
+    "content": "Sprint B3: Approval Delegation API (create/list/revoke)",
+    "status": "completed"
+  },
+  {
+    "content": "Sprint B5: Closing reopen request flow (creates approval)",
+    "status": "completed"
+  },
+  {
+    "content": "Sprint B2: Bank Statement Import (reconciliation assistant)",
     "status": "pending"
   },
   {
-    "content": "Sprint A: Testing",
+    "content": "Sprint C1: Recipe Versioning & Approval",
+    "status": "pending"
+  },
+  {
+    "content": "Sprint C2: Production Kanban Board",
+    "status": "pending"
+  },
+  {
+    "content": "Sprint C3: Variance Root Cause Capture",
+    "status": "pending"
+  },
+  {
+    "content": "Sprint C4: Exception Center Upgrade",
     "status": "pending"
   }
 ]

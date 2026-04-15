@@ -218,6 +218,85 @@ async def reverse_journal(journal_id: str, current_user: dict = Depends(get_curr
     await log_audit(current_user["id"], "reverse", "finance", "journal", journal_id, details=f"Reversed {journal['journal_number']} → {reversal_number}")
     return {"id": str(rev_result.inserted_id), "journal_number": reversal_number, "message": "Journal reversed"}
 
+@router.post("/{journal_id}/clone")
+async def clone_journal(journal_id: str, current_user: dict = Depends(get_current_user)):
+    """Clone a journal entry as a new draft with today's date"""
+    original = await journals_col.find_one({"_id": ObjectId(journal_id)})
+    if not original:
+        raise HTTPException(status_code=404, detail="Journal not found")
+    
+    new_number = generate_journal_number()
+    clone_doc = {
+        "journal_number": new_number,
+        "posting_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "description": f"Clone of {original['journal_number']}: {original.get('description', '')}",
+        "outlet_id": original.get("outlet_id"),
+        "source_type": "manual",
+        "source_id": "",
+        "status": "draft",
+        "total_debit": original.get("total_debit", 0),
+        "total_credit": original.get("total_credit", 0),
+        "created_by": current_user["id"],
+        "created_at": now_utc(),
+        "updated_at": now_utc(),
+    }
+    result = await journals_col.insert_one(clone_doc)
+    clone_id = str(result.inserted_id)
+    
+    # Clone lines
+    async for line in journal_lines_col.find({"journal_id": journal_id}):
+        clone_line = {
+            "journal_id": clone_id,
+            "line_number": line["line_number"],
+            "account_id": line["account_id"],
+            "account_code": line.get("account_code", ""),
+            "account_name": line.get("account_name", ""),
+            "debit": line.get("debit", 0),
+            "credit": line.get("credit", 0),
+            "description": line.get("description", ""),
+        }
+        await journal_lines_col.insert_one(clone_line)
+    
+    await log_audit(current_user["id"], "clone", "finance", "journal", clone_id, details=f"Cloned from {original['journal_number']}")
+    return {"id": clone_id, "journal_number": new_number, "message": "Journal cloned as draft"}
+
+class BatchPostRequest(BaseModel):
+    journal_ids: List[str]
+
+@router.post("/batch/post")
+async def batch_post_journals(req: BatchPostRequest, current_user: dict = Depends(get_current_user)):
+    """Post multiple draft journals at once"""
+    await check_permission(current_user, "finance.view_journals")
+    posted = 0
+    errors = []
+    for jid in req.journal_ids:
+        journal = await journals_col.find_one({"_id": ObjectId(jid)})
+        if not journal:
+            errors.append(f"{jid}: not found")
+            continue
+        if journal["status"] != "draft":
+            errors.append(f"{journal.get('journal_number', jid)}: not draft")
+            continue
+        await journals_col.update_one(
+            {"_id": ObjectId(jid)},
+            {"$set": {"status": "posted", "posted_by": current_user["id"], "posted_at": now_utc(), "updated_at": now_utc()}}
+        )
+        posted += 1
+    
+    await log_audit(current_user["id"], "batch_post", "finance", "journal", details=f"Batch posted {posted} journals")
+    return {"posted": posted, "errors": errors, "message": f"{posted} journals posted"}
+
+@router.get("/templates")
+async def get_journal_templates(current_user: dict = Depends(get_current_user)):
+    """Get recent posted journals as templates for cloning"""
+    templates = []
+    async for j in journals_col.find({"status": "posted", "source_type": "manual"}).sort("created_at", -1).limit(10):
+        doc = serialize_doc(j)
+        doc["line_count"] = await journal_lines_col.count_documents({"journal_id": str(j["_id"])})
+        templates.append(doc)
+    return {"templates": templates}
+
+
 @router.get("/summary/by-account")
 async def journal_summary_by_account(current_user: dict = Depends(get_current_user), outlet_id: str = "", date_from: str = "", date_to: str = ""):
     """Get aggregated debit/credit totals by COA account from posted journals"""
