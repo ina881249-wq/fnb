@@ -33,6 +33,9 @@ notifications_col = db["notifications"]
 coa_accounts_col = db["coa_accounts"]
 reconciliations_col = db["reconciliations"]
 daily_closings_col = db["daily_closings"]
+recipes_col = db["recipes"]
+recipe_lines_col = db["recipe_lines"]
+production_orders_col = db["production_orders"]
 
 async def create_indexes():
     await users_col.create_index("email", unique=True)
@@ -59,3 +62,7 @@ async def create_indexes():
     await journal_lines_col.create_index("account_id")
     await reconciliations_col.create_index([("outlet_id", 1), ("date", -1)])
     await daily_closings_col.create_index([("outlet_id", 1), ("date", -1)], unique=True)
+    await recipes_col.create_index("name")
+    await recipes_col.create_index("output_item_id")
+    await recipe_lines_col.create_index("recipe_id")
+    await production_orders_col.create_index([("outlet_id", 1), ("status", 1)])

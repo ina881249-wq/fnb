@@ -8,7 +8,7 @@ import { Separator } from '../components/ui/separator';
 import { Badge } from '../components/ui/badge';
 import {
   LayoutDashboard, DollarSign, Package, FileText, Settings, CheckSquare,
-  ClipboardList, ChevronLeft, ChevronRight, LogOut, Bell, Building2, ChefHat, Menu, X
+  ClipboardList, ChevronLeft, ChevronRight, LogOut, Bell, Building2, ChefHat, Menu, X, Factory
 } from 'lucide-react';
 
 const navItems = [
@@ -17,7 +17,9 @@ const navItems = [
   { to: '/management/journals', label: 'Journal Entries', icon: DollarSign, section: 'Finance' },
   { to: '/management/finance', label: 'Cash & Bank', icon: DollarSign, section: 'Finance' },
   { to: '/management/reconciliation', label: 'Reconciliation', icon: DollarSign, section: 'Finance' },
-  { to: '/management/inventory', label: 'Inventory', icon: Package, section: 'Inventory' },
+  { to: '/management/inventory', label: 'Items & Stock', icon: Package, section: 'Inventory' },
+  { to: '/management/recipes', label: 'Recipe & BOM', icon: ChefHat, section: 'Inventory' },
+  { to: '/management/production', label: 'Production Orders', icon: Factory, section: 'Inventory' },
   { to: '/management/reports', label: 'Reports', icon: FileText, section: 'Reports' },
   { to: '/management/closing-monitor', label: 'Closing Monitor', icon: CheckSquare, section: 'Operations' },
   { to: '/management/approvals', label: 'Approvals', icon: CheckSquare, section: 'Operations' },

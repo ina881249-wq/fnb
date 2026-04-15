@@ -159,6 +159,52 @@ async def create_cash_movement(req: CashMovementRequest, current_user: dict = De
     
     await log_audit(current_user["id"], "create", "finance", "cash_movement", movement_id, details=f"{req.type}: {req.amount}")
     
+    # Auto-post journal entry for this cash movement
+    if not req.requires_approval:
+        try:
+            from routers.journal_router import auto_post_journal
+            from database import coa_accounts_col
+            # Find appropriate COA accounts
+            cash_coa = await coa_accounts_col.find_one({"code": "1120"})  # Outlet Cash
+            bank_coa = await coa_accounts_col.find_one({"code": "1110"})  # Bank
+            revenue_coa = await coa_accounts_col.find_one({"code": "4100"})  # Food Sales
+            petty_coa = await coa_accounts_col.find_one({"code": "1130"})  # Petty Cash
+            
+            lines = []
+            if req.type == "cash_in" and cash_coa and revenue_coa:
+                lines = [
+                    {"account_id": str(cash_coa["_id"]), "account_code": "1120", "account_name": "Outlet Cash", "debit": req.amount, "credit": 0, "description": "Cash in"},
+                    {"account_id": str(revenue_coa["_id"]), "account_code": "4100", "account_name": "Food Sales", "debit": 0, "credit": req.amount, "description": "Revenue"},
+                ]
+            elif req.type == "cash_out" and cash_coa:
+                expense_coa = await coa_accounts_col.find_one({"code": "6900"})
+                if expense_coa:
+                    lines = [
+                        {"account_id": str(expense_coa["_id"]), "account_code": "6900", "account_name": "Misc Expense", "debit": req.amount, "credit": 0, "description": "Cash out"},
+                        {"account_id": str(cash_coa["_id"]), "account_code": "1120", "account_name": "Outlet Cash", "debit": 0, "credit": req.amount, "description": "Cash out"},
+                    ]
+            elif req.type == "settlement" and cash_coa and bank_coa:
+                lines = [
+                    {"account_id": str(bank_coa["_id"]), "account_code": "1110", "account_name": "Bank", "debit": req.amount, "credit": 0, "description": "Settlement to bank"},
+                    {"account_id": str(cash_coa["_id"]), "account_code": "1120", "account_name": "Outlet Cash", "debit": 0, "credit": req.amount, "description": "Settlement from cash"},
+                ]
+            elif req.type == "transfer" and cash_coa and bank_coa:
+                lines = [
+                    {"account_id": str(bank_coa["_id"]), "account_code": "1110", "account_name": "Bank", "debit": req.amount, "credit": 0, "description": "Transfer in"},
+                    {"account_id": str(cash_coa["_id"]), "account_code": "1120", "account_name": "Outlet Cash", "debit": 0, "credit": req.amount, "description": "Transfer out"},
+                ]
+            
+            if lines:
+                await auto_post_journal(
+                    source_type="cash_movement", source_id=movement_id,
+                    description=f"{req.type}: {req.description or req.reference or ''} - Rp {req.amount:,.0f}",
+                    outlet_id=req.outlet_id,
+                    posting_date=doc["date"],
+                    lines=lines, user_id=current_user["id"]
+                )
+        except Exception as e:
+            print(f"Auto-journal posting error: {e}")
+    
     await ws_manager.broadcast_to_outlet(req.outlet_id, {
         "type": "cash_movement_created",
         "movement_id": movement_id,
@@ -244,6 +290,30 @@ async def create_petty_cash_expense(req: PettyCashExpenseRequest, current_user: 
     )
     
     await log_audit(current_user["id"], "create", "finance", "petty_cash", str(result.inserted_id), details=f"Expense: {req.amount} - {req.description}")
+    
+    # Auto-post journal for petty cash expense
+    try:
+        from routers.journal_router import auto_post_journal
+        from database import coa_accounts_col
+        petty_coa = await coa_accounts_col.find_one({"code": "1130"})  # Petty Cash
+        # Map category to expense account
+        cat_map = {"transport": "6300", "supplies": "6400", "cleaning": "6400", "maintenance": "6500", "operational": "6900"}
+        exp_code = cat_map.get(req.category, "6900")
+        expense_coa = await coa_accounts_col.find_one({"code": exp_code})
+        if petty_coa and expense_coa:
+            await auto_post_journal(
+                source_type="petty_cash", source_id=str(result.inserted_id),
+                description=f"Petty Cash: {req.description} - Rp {req.amount:,.0f}",
+                outlet_id=req.outlet_id, posting_date=doc["date"],
+                lines=[
+                    {"account_id": str(expense_coa["_id"]), "account_code": exp_code, "account_name": expense_coa["name"], "debit": req.amount, "credit": 0, "description": req.description},
+                    {"account_id": str(petty_coa["_id"]), "account_code": "1130", "account_name": "Petty Cash", "debit": 0, "credit": req.amount, "description": req.description},
+                ],
+                user_id=current_user["id"]
+            )
+    except Exception as e:
+        print(f"Auto-journal petty cash error: {e}")
+    
     return {"id": str(result.inserted_id), "message": "Petty cash expense recorded"}
 
 # ===================== SALES SUMMARIES =====================

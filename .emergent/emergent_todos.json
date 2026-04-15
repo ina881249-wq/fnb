@@ -1,42 +1,30 @@
 [
   {
-    "content": "Phase 1A: COA Management (Chart of Accounts tree hierarchy)",
+    "content": "Phase 1A (remaining): Auto-post journals from finance transactions",
     "status": "completed"
   },
   {
-    "content": "Phase 1A: Journal Engine / Double Entry + Posting Service",
+    "content": "Phase 1B: Recipe / BOM Consumption Engine",
     "status": "completed"
   },
   {
-    "content": "Phase 1A: Cash & Bank Reconciliation",
+    "content": "Phase 1B: Production / Prep Orders with Kanban status",
     "status": "completed"
   },
   {
-    "content": "Phase 1A: Daily Closing Outlet (workflow + lock)",
+    "content": "Phase 1B: Stock Movement Enterprise Upgrade (types, reason codes, transit)",
     "status": "completed"
   },
   {
-    "content": "Phase 1A: Update Management sidebar + new menu structure",
+    "content": "Phase 1B: Frontend - Recipe/BOM page + Production page + enhanced nav",
     "status": "completed"
   },
   {
-    "content": "Phase 1A: Update Outlet portal with Daily Closing",
+    "content": "Phase 1B: Seed data for recipes (3 sample recipes)",
     "status": "completed"
   },
   {
-    "content": "Phase 1A: Closing Monitor page for Management",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 1A: Refactor reports to derive from journals",
-    "status": "pending"
-  },
-  {
-    "content": "Phase 1A: Add server-side pagination to existing lists",
-    "status": "pending"
-  },
-  {
-    "content": "Phase 1A: End to End Testing",
+    "content": "Phase 1B: End to End Testing",
     "status": "pending"
   }
 ]

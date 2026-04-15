@@ -18,6 +18,8 @@ import COAPage from './pages/management/COAPage';
 import JournalEntriesPage from './pages/management/JournalEntriesPage';
 import ReconciliationPage from './pages/management/ReconciliationPage';
 import ClosingMonitorPage from './pages/management/ClosingMonitorPage';
+import RecipeBOMPage from './pages/management/RecipeBOMPage';
+import ProductionPage from './pages/management/ProductionPage';
 import OutletDashboard from './pages/outlet/OutletDashboard';
 import CashManagement from './pages/outlet/CashManagement';
 import SalesSummary from './pages/outlet/SalesSummary';
@@ -66,6 +68,8 @@ function AppRoutes() {
         <Route path="reconciliation" element={<ReconciliationPage />} />
         <Route path="closing-monitor" element={<ClosingMonitorPage />} />
         <Route path="inventory" element={<InventoryPage />} />
+        <Route path="recipes" element={<RecipeBOMPage />} />
+        <Route path="production" element={<ProductionPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="admin" element={<AdminPage />} />
         <Route path="approvals" element={<ApprovalsPage />} />

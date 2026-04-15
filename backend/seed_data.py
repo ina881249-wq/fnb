@@ -385,6 +385,75 @@ async def seed_data():
                 )
         print(f"Created {len(coa_accounts)} COA accounts")
     
+    # ===================== RECIPES =====================
+    from database import recipes_col, recipe_lines_col
+    existing_recipes = await recipes_col.count_documents({})
+    if existing_recipes == 0:
+        # Get item IDs for recipes
+        ayam = await items_col.find_one({"name": "Ayam Potong"})
+        beras = await items_col.find_one({"name": "Beras Premium"})
+        minyak = await items_col.find_one({"name": "Minyak Goreng"})
+        bawang_m = await items_col.find_one({"name": "Bawang Merah"})
+        bawang_p = await items_col.find_one({"name": "Bawang Putih"})
+        cabai = await items_col.find_one({"name": "Cabai Merah"})
+        santan = await items_col.find_one({"name": "Santan Kelapa"})
+        nasi = await items_col.find_one({"name": "Nasi Putih"})
+        rendang = await items_col.find_one({"name": "Bumbu Rendang"})
+        sambal = await items_col.find_one({"name": "Sambal Matah"})
+        gula = await items_col.find_one({"name": "Gula Pasir"})
+        
+        recipes_data = []
+        if ayam and nasi and sambal:
+            r1 = await recipes_col.insert_one({
+                "name": "Nasi Ayam Sambal Matah", "output_item_id": None,
+                "output_quantity": 1, "output_uom": "porsi",
+                "description": "Nasi ayam dengan sambal matah segar", "yield_percentage": 95,
+                "version": 1, "active": True, "created_by": "system", "created_at": now, "updated_at": now,
+            })
+            lines = [
+                {"recipe_id": str(r1.inserted_id), "line_number": 1, "item_id": str(nasi["_id"]), "quantity": 0.2, "uom": "kg"},
+                {"recipe_id": str(r1.inserted_id), "line_number": 2, "item_id": str(ayam["_id"]), "quantity": 0.15, "uom": "kg"},
+                {"recipe_id": str(r1.inserted_id), "line_number": 3, "item_id": str(sambal["_id"]), "quantity": 0.03, "uom": "kg"},
+                {"recipe_id": str(r1.inserted_id), "line_number": 4, "item_id": str(minyak["_id"]), "quantity": 0.05, "uom": "liter"},
+            ]
+            await recipe_lines_col.insert_many(lines)
+        
+        if ayam and rendang and santan and nasi:
+            r2 = await recipes_col.insert_one({
+                "name": "Nasi Rendang Sapi", "output_item_id": None,
+                "output_quantity": 1, "output_uom": "porsi",
+                "description": "Nasi dengan rendang daging sapi", "yield_percentage": 90,
+                "version": 1, "active": True, "created_by": "system", "created_at": now, "updated_at": now,
+            })
+            daging = await items_col.find_one({"name": "Daging Sapi"})
+            if daging:
+                lines2 = [
+                    {"recipe_id": str(r2.inserted_id), "line_number": 1, "item_id": str(nasi["_id"]), "quantity": 0.2, "uom": "kg"},
+                    {"recipe_id": str(r2.inserted_id), "line_number": 2, "item_id": str(daging["_id"]), "quantity": 0.12, "uom": "kg"},
+                    {"recipe_id": str(r2.inserted_id), "line_number": 3, "item_id": str(rendang["_id"]), "quantity": 0.05, "uom": "kg"},
+                    {"recipe_id": str(r2.inserted_id), "line_number": 4, "item_id": str(santan["_id"]), "quantity": 0.1, "uom": "liter"},
+                ]
+                await recipe_lines_col.insert_many(lines2)
+        
+        if bawang_m and bawang_p and cabai and minyak:
+            # Prep recipe: Bumbu Rendang from raw
+            r3 = await recipes_col.insert_one({
+                "name": "Prep: Bumbu Rendang (dari bahan mentah)", "output_item_id": str(rendang["_id"]) if rendang else None,
+                "output_quantity": 1, "output_uom": "kg",
+                "description": "Pembuatan bumbu rendang dari bahan dasar", "yield_percentage": 85,
+                "version": 1, "active": True, "created_by": "system", "created_at": now, "updated_at": now,
+            })
+            lines3 = [
+                {"recipe_id": str(r3.inserted_id), "line_number": 1, "item_id": str(bawang_m["_id"]), "quantity": 0.3, "uom": "kg"},
+                {"recipe_id": str(r3.inserted_id), "line_number": 2, "item_id": str(bawang_p["_id"]), "quantity": 0.2, "uom": "kg"},
+                {"recipe_id": str(r3.inserted_id), "line_number": 3, "item_id": str(cabai["_id"]), "quantity": 0.15, "uom": "kg"},
+                {"recipe_id": str(r3.inserted_id), "line_number": 4, "item_id": str(minyak["_id"]), "quantity": 0.1, "uom": "liter"},
+                {"recipe_id": str(r3.inserted_id), "line_number": 5, "item_id": str(gula["_id"]), "quantity": 0.05, "uom": "kg"},
+            ]
+            await recipe_lines_col.insert_many(lines3)
+        
+        print("Created sample recipes")
+    
     print("\n=== DEMO CREDENTIALS ===")
     print("Admin: admin@fnb.com / admin123 (All portals, all outlets)")
     print("Finance: finance@fnb.com / finance123 (Management portal)")

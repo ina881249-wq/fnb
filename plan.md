@@ -8,14 +8,15 @@
 - Keep architecture as **modular monolith** (FastAPI + MongoDB) with strict domain boundaries so future phases can be added without redesign.
 - Implement the **Feature Enhancement Backlog** (saved as the source-of-truth in `/app/memory/FEATURE_BACKLOG.md`) **phase-by-phase** with explicit acceptance criteria to ensure nothing is missed.
 - Elevate accounting/inventory accuracy and auditability:
-  - Double-entry accounting via **Journal Engine**
+  - Double-entry accounting via **COA + Journal Engine + posting service**
   - Strong controls via **reconciliation, daily closing, approvals, and alerts**
+  - Production-aware inventory via **recipes + production orders**
 - Upgrade UI to an enterprise operational cockpit:
   - pagination/search/filter/saved views/bulk actions
   - workflow-first screens
   - consistent menu structure and contextual actions
 
-> Current status: **Original Phase 1 & 2 baseline build is COMPLETE** (auth/RBAC, finance, inventory, reporting/export, approvals, audit, portals + UX). Next work is **Enhancement Phase 1A → 1D**, then **Enhancement Phase 2A → 2B**.
+> Current status: **Original Phase 1 & 2 baseline build is COMPLETE**. Enhancement **Phase 1A and 1B are COMPLETE**. Next work is **Enhancement Phase 1C → 1D**, then **Enhancement Phase 2A → 2B**.
 
 ---
 
@@ -38,157 +39,152 @@ Exit criteria: Met.
 
 ### Phase 2 — V1 App Baseline (Completed)
 Delivered baseline product spanning:
-- **Management Portal (7 pages)**: Dashboard, Finance, Inventory, Reports (Excel/PDF export), Admin (users/roles/outlets), Approvals, Audit.
-- **Outlet Portal (5 pages)**: Dashboard, Cash, Sales Summary, Petty Cash, Inventory.
+- **Management Portal**: Dashboard, Finance, Inventory, Reports (Excel/PDF export), Admin (users/roles/outlets), Approvals, Audit.
+- **Outlet Portal**: Dashboard, Cash, Sales Summary, Petty Cash, Inventory.
 - Seed data: 3 outlets + sample accounts/items/sales/cash/petty-cash.
 
 Hardening fixes applied:
 - `_id` serialization corrected → `id` for frontend consistency
 - Outlet portal auto-select outlet for assigned users
 
-Exit criteria: Met (backend tests 100%, manual UI verification complete).
+Exit criteria: Met.
 
 ---
 
-## Enhancement Roadmap (NEW) — Focus on perfecting Phase 1 & 2 first
+## Enhancement Roadmap — Focus on perfecting Phase 1 & 2 first
 
-### Enhancement Phase 1A — Finance Control Core (START HERE)
+### Enhancement Phase 1A — Finance Control Core (COMPLETED)
 Goal: make finance/accounting **control-grade** with double-entry, reconciliation, and daily locking.
 
-#### Scope (Features)
-1) **Journal Engine / Double Entry Accounting**
-- Add Journal module:
-  - journal header + journal lines (debit/credit)
-  - source document reference (cash movement, petty cash, settlement, sales summary, adjustments)
-  - posting date, outlet scope
-  - status: draft, posted, reversed
-- All finance transactions must go through **posting service**.
-- Reports (P&L/cashflow/balance sheet/equity) must be derived from **journals** (source-of-truth).
-- UI: Management → Finance & Accounting → Journal Entries (list + filters + detail view).
+#### Scope (Features) — Delivered
+1) **COA Management (Chart of Accounts) — tree/hierarchy**
+- COA tree (parent-child), account types (asset/liability/equity/revenue/expense/cogs/contra)
+- Seeded **32 COA accounts**
+- UI: Management → Finance → Chart of Accounts
 
-2) **COA Management (Chart of Accounts) — tree/hierarchy**
-- COA tree (parent-child), account types (asset/liability/equity/revenue/expense/cogs)
-- active/inactive, report mapping
-- support dimensions (future-ready): outlet/city/cost center/analytic tag
-- UI: Management → Finance & Accounting → Chart of Accounts (tree view + search + inline edit).
+2) **Journal Engine / Double Entry Accounting**
+- Journal header + journal lines (debit/credit)
+- Status: draft, posted, reversed
+- Reversal creates counter-journal
+- UI: Management → Finance → Journal Entries
 
-3) **Cash Reconciliation & Bank Reconciliation**
-- expected vs actual amount, difference, variance reason, approval status
-- reconciliation per outlet/account/period
-- rule: daily closing cannot lock if mismatch unresolved
+3) **Auto-posting for finance transactions (initial mapping)**
+- Cash movements and petty cash now auto-generate balanced journals
+- Posting service function available (`auto_post_journal`)
+
+4) **Cash & Bank Reconciliation**
+- expected vs actual, difference, variance reason
+- approval actions (approve/reject)
+- mismatch WebSocket notification foundation
+- UI: Management → Finance → Reconciliation
+
+5) **Daily Closing Outlet (workflow + lock) + Monitor**
+- open → in_progress → submitted → locked
+- checklist (sales, petty cash, stock movements, reconciliation)
+- override mechanism for privileged users
 - UI:
-  - Management → Finance & Accounting → Reconciliation (wizard/stepper)
-  - Outlet → Cash & Bank → Daily Cash Review (summary + variance submit)
+  - Outlet → Daily Closing (stepper)
+  - Management → Closing Monitor
 
-4) **Daily Closing Outlet (workflow + lock)**
-- daily status per outlet: open → in_progress → submitted → approved → locked
-- checklist:
-  - sales summary complete
-  - petty cash complete
-  - stock movement complete
-  - cash reconciliation complete
-- after locked: edits require privileged override + audit trail
-- UI:
-  - Outlet → Tasks & Closing → Daily Closing (stepper)
-  - Management → Operations → Outlet Closing Monitor
+#### Acceptance criteria — Met
+- Balanced journal validation exists and is enforced.
+- Reconciliation variance blocks closing submission.
+- Closing can be locked and overridden with audit.
 
-#### User stories
-- Finance can view journal entries and trace them to source documents.
-- Every cash movement / petty cash expense / settlement / sales summary generates correct debit-credit postings.
-- Finance can reconcile cash/bank and approve variances.
-- Outlet manager can complete daily checklist and submit closing.
-- Locked day cannot be edited except via override with audit.
-
-#### Backend work
-- New collections (minimum):
-  - `coa_accounts`
-  - `journals` (header)
-  - `journal_lines`
-  - `reconciliations`
-  - `daily_closings`
-- New routers (suggested):
-  - `/api/coa/*`
-  - `/api/journals/*`
-  - `/api/reconciliation/*`
-  - `/api/daily-closing/*`
-- Refactor existing finance endpoints to call:
-  - `posting_service.post_cash_movement(...)`
-  - `posting_service.post_petty_cash_expense(...)`
-  - `posting_service.post_sales_summary(...)`
-- Update reporting endpoints to query journals.
-
-#### Frontend work
-- New management pages:
-  - COA Management
-  - Journal Entries
-  - Reconciliation (wizard)
-  - Outlet Closing Monitor
-- New outlet pages:
-  - Daily Cash Review (reconciliation summary)
-  - Daily Closing (stepper)
-- Add server-side pagination primitives to existing lists.
-
-#### Acceptance criteria
-- Creating any finance transaction results in balanced journal lines (total debit == total credit).
-- Reports match journal totals.
-- Closing cannot reach locked when reconciliation mismatch unresolved.
-- Audit shows who locked and who overrode.
+> Remaining Phase 1A follow-ups (moved into Phase 1D):
+- Refactor **all** reporting calculations to be journal-driven (source-of-truth)
+- Standardize server-side pagination/search/filter patterns across all finance lists
 
 ---
 
-### Enhancement Phase 1B — Inventory Control Core
+### Enhancement Phase 1B — Inventory Control Core (COMPLETED)
 Goal: inventory becomes production-aware and sales-consumption-aware.
 
-Scope:
-- **Recipe/BOM engine** (raw → prep → sub-prep → menu)
-- **Consumption engine** (from sales summary now; POS later)
-- **Production / Prep Orders** (batch, yield/loss, statuses; management UI; kitchen portal later)
-- **Enterprise stock movement upgrades**:
-  - expanded movement types
-  - mandatory reason codes
-  - approvals for certain movements
-  - transfer workflow with transit tracking
+#### Scope (Features) — Delivered
+1) **Recipe/BOM Engine**
+- Recipe master + ingredient lines
+- yield % + total cost calculation
+- Consumption preview API
+- Seeded **3 sample recipes**
+- UI: Management → Inventory → Recipe & BOM
 
-Key outputs:
-- Theoretical consumption computed and posted.
-- Stock reduced by BOM consumption.
-- Production outputs roll up cost.
+2) **Production / Prep Orders**
+- Full lifecycle: draft/planned → in_progress → completed (cancel supported)
+- On start: consumes ingredients based on recipe
+- On completion: adds output stock and calculates yield %
+- UI: Management → Inventory → Production Orders
+
+> Remaining Phase 1B follow-ups:
+- Upgrade stock movement into full enterprise transfer flow (transit tracking, transfer-in/out) as described in backlog (planned in Phase 1D/Phase 2B where portal separation is introduced).
 
 ---
 
-### Enhancement Phase 1C — Control Layer (Decision + Action)
+### Enhancement Phase 1C — Control Layer (NEXT)
 Goal: exception-first monitoring and operational investigation.
 
 Scope:
-- **Variance Report** (theoretical vs actual) by outlet/item/period + thresholds
-- **Exception Alerts engine**:
-  - low stock, cash mismatch, overdue closing, missing submissions, unusual expense, high variance
-  - WebSocket notify + dashboard feed
-- **Audit Trail operational upgrade**:
-  - before_value/after_value
-  - filter by outlet/user/module/transaction
-  - export support
+1) **Variance Report**
+- theoretical consumption vs actual stock movement
+- variance by outlet/item/period
+- threshold alerts when exceeding limits
+- Menu:
+  - Management → Reports → Variance
+  - Outlet → Reports → Variance Snapshot
+
+2) **Exception Alerts engine**
+- alert types:
+  - low stock
+  - cash mismatch
+  - overdue closing
+  - missing submission
+  - unusual expense
+  - high variance
+- delivery:
+  - dashboard feed + badges
+  - WebSocket notifications to targeted users
+- Menu:
+  - Management → Dashboard/Alerts
+  - Outlet → Dashboard → Today Alerts
+
+3) **Audit Trail operational upgrade**
+- store before_value / after_value
+- searchable by outlet/user/module/transaction
+- drill-down detail view + export (Phase 1D UI)
+
+Acceptance criteria:
+- Variance report reconciles recipe-driven theoretical usage with stock movement deltas.
+- Alerts can be generated deterministically from rules and shown in dashboards.
+- Audit trail can prove who changed what with before/after diffs.
 
 ---
 
-### Enhancement Phase 1D — UI/UX Best Practices (applies to all modules)
+### Enhancement Phase 1D — UI/UX Best Practices (after 1C, applies to all modules)
 Goal: make UI enterprise-grade for daily operations.
 
 Scope:
-- Server-side pagination (10/20/50) across all long lists
-- Search global + per module
-- Smart filter + saved views
+- Server-side pagination (10/20/50) across all long lists:
+  - sales summaries, cash movements, petty cash, stock movements, journal entries, audit trail, approvals, items
+- Search:
+  - global (command palette) + per module search
+- Smart filters + saved views (per role)
 - Sort + sticky headers + column visibility
-- Bulk actions (approve many, export selected, batch close)
-- Empty/loading/error states (skeletons + CTA)
-- Contextual actions only
+- Bulk actions (approve many, export selected, batch close outlet)
+- Empty/loading/error states (skeleton + CTA)
+- Contextual actions only (role + page context)
 - Responsive optimizations for outlet/tablet
 - Workflow-first screens (daily tasks → actions → closing)
-- Implement the recommended menu structure (Management + Outlet) from backlog
+- Continue aligning menu structure to backlog (already started in Management)
+- Reporting refactor milestone:
+  - Move P&L/Cashflow/Balance Sheet calculations to be journal-driven
+
+Acceptance criteria:
+- All key lists have stable pagination + filters.
+- Global search works and is role-scoped.
+- Reports are consistent with journal totals.
 
 ---
 
-### Enhancement Phase 2A — Scale & Control Lanjutan
+### Enhancement Phase 2A — Scale & Control Lanjutan (Later)
 Scope:
 - Budgeting per outlet (budget vs actual, burn rate)
 - Granular approvals (rule-based: type/amount/outlet/role, chains/escalation/delegation)
@@ -197,7 +193,7 @@ Scope:
 
 ---
 
-### Enhancement Phase 2B — Portal Expansion (functional, not placeholders)
+### Enhancement Phase 2B — Portal Expansion (functional, not placeholders) (Later)
 Scope:
 - **Kitchen Portal**: production tasks (kanban), batch completion, yield/loss
 - **Warehouse Portal**: receiving, picking list, transfer requests, batch receipts
@@ -205,19 +201,22 @@ Scope:
 ---
 
 ## 3) Next Actions (immediate)
-1. Start **Enhancement Phase 1A** with the correct implementation order:
-   1) COA → 2) Journal Engine & Posting Service → 3) Refactor reports to journals → 4) Reconciliation → 5) Daily Closing
-2. Confirm MVP accounting policy assumptions for Phase 1A:
-   - COA structure depth
-   - Mapping rules for auto-journals (sales/cash/settlement/petty cash)
-3. Confirm whether outlet closing approval should be:
-   - manager only, or manager + finance chain
-4. After Phase 1A, proceed to Phase 1B.
+1. Start **Enhancement Phase 1C** in this order:
+   1) Define theoretical consumption source (recipes + production + sales summary)
+   2) Implement variance computation services + endpoints
+   3) Implement alert engine + WebSocket delivery + dashboard feed
+   4) Upgrade audit trail schema (before/after) and retrofit logging in critical modules
+2. Confirm variance policy for MVP:
+   - which items tracked first (protein/high-cost first?)
+   - variance threshold defaults per category/outlet
+3. Confirm who receives which alerts (role routing):
+   - outlet manager vs finance head vs inventory controller
+4. After 1C is stable, proceed to **Phase 1D UI/UX** (pagination/search/filter/bulk actions + journal-driven reports)
 
 ---
 
 ## 4) Success Criteria
-- All transactions produce correct **double-entry journals** and reports derive from journals.
+- All transactions produce correct **double-entry journals** and (eventually) reports derive from journals.
 - Reconciliation + variance approvals exist and block final locking when unresolved.
 - Daily outlet closing workflow exists (open → locked) with override + audit.
 - Inventory supports recipes/production and produces variance reporting.
