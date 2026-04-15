@@ -1,22 +1,26 @@
 [
   {
-    "content": "UI Polish: Light/Dark theme tokens + context + toggle",
+    "content": "Sprint A1: Reusable DataTable component (pagination/search/filter/sort/bulk)",
     "status": "completed"
   },
   {
-    "content": "Light/Dark Mode: Applied to ManagementLayout, OutletLayout, LoginPage, PortalSelector",
+    "content": "Sprint A2: Global Command Palette (Ctrl+K)",
     "status": "completed"
   },
   {
-    "content": "i18n: Language context + EN/ID translations (100+ keys) + switcher on all pages",
+    "content": "Sprint A3: Apply DataTable to ALL list pages",
+    "status": "pending"
+  },
+  {
+    "content": "Sprint A4: Outlet Task Home (task-oriented dashboard)",
     "status": "completed"
   },
   {
-    "content": "Remove 'Made with Emergent' badge from index.html",
-    "status": "completed"
+    "content": "Sprint A5: Saved Views & Preset Filters",
+    "status": "pending"
   },
   {
-    "content": "Sidebar/Topbar backgrounds use CSS variables (theme-aware)",
-    "status": "completed"
+    "content": "Sprint A: Testing",
+    "status": "pending"
   }
 ]

@@ -111,6 +111,8 @@ function AppRoutes() {
   );
 }
 
+import CommandPalette from './components/common/CommandPalette';
+
 function App() {
   return (
     <BrowserRouter>
@@ -119,6 +121,7 @@ function App() {
           <AuthProvider>
             <div className="min-h-screen bg-[hsl(var(--background))] text-[hsl(var(--foreground))]">
               <AppRoutes />
+              <CommandPalette />
               <Toaster position="top-right" richColors />
             </div>
           </AuthProvider>
