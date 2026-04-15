@@ -24,6 +24,8 @@ import VariancePage from './pages/management/VariancePage';
 import AlertsPage from './pages/management/AlertsPage';
 import BudgetingPage from './pages/management/BudgetingPage';
 import RecurringPage from './pages/management/RecurringPage';
+import DrilldownPage from './pages/management/DrilldownPage';
+import ApprovalRulesPage from './pages/management/ApprovalRulesPage';
 import OutletDashboard from './pages/outlet/OutletDashboard';
 import CashManagement from './pages/outlet/CashManagement';
 import SalesSummary from './pages/outlet/SalesSummary';
@@ -78,9 +80,11 @@ function AppRoutes() {
         <Route path="production" element={<ProductionPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="variance" element={<VariancePage />} />
+        <Route path="drilldown" element={<DrilldownPage />} />
         <Route path="alerts" element={<AlertsPage />} />
         <Route path="admin" element={<AdminPage />} />
         <Route path="approvals" element={<ApprovalsPage />} />
+        <Route path="approval-rules" element={<ApprovalRulesPage />} />
         <Route path="audit" element={<AuditTrailPage />} />
         <Route index element={<Navigate to="dashboard" />} />
       </Route>

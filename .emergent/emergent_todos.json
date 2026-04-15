@@ -1,26 +1,14 @@
 [
   {
-    "content": "Phase 2A: Budgeting per Outlet (backend + frontend)",
+    "content": "Phase 2A #15: Multi-level Reporting Drill-down",
     "status": "completed"
   },
   {
-    "content": "Phase 2A: Granular Approval Rules Engine (backend)",
+    "content": "Phase 2A #13: Approval Rules Management UI",
     "status": "completed"
   },
   {
-    "content": "Phase 2A: Scheduled/Recurring Transactions (backend + frontend)",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 1D: Enhanced Audit Trail (before/after schema)",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 1D: Empty states with CTAs on all pages",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 1D: Navigation restructured (17 menu items)",
+    "content": "Phase 2A: All features complete",
     "status": "completed"
   }
 ]

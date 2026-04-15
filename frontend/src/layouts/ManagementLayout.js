@@ -8,7 +8,7 @@ import { Separator } from '../components/ui/separator';
 import { Badge } from '../components/ui/badge';
 import {
   LayoutDashboard, DollarSign, Package, FileText, Settings, CheckSquare,
-  ClipboardList, ChevronLeft, ChevronRight, LogOut, Bell, Building2, ChefHat, Menu, X, Factory, AlertTriangle, BarChart3, Target, Repeat
+  ClipboardList, ChevronLeft, ChevronRight, LogOut, Bell, Building2, ChefHat, Menu, X, Factory, AlertTriangle, BarChart3, Target, Repeat, TrendingUp, Shield
 } from 'lucide-react';
 
 const navItems = [
@@ -25,8 +25,10 @@ const navItems = [
   { to: '/management/production', label: 'Production Orders', icon: Factory, section: 'Inventory' },
   { to: '/management/reports', label: 'Reports', icon: FileText, section: 'Reports' },
   { to: '/management/variance', label: 'Variance', icon: BarChart3, section: 'Reports' },
+  { to: '/management/drilldown', label: 'Drill-Down', icon: TrendingUp, section: 'Reports' },
   { to: '/management/closing-monitor', label: 'Closing Monitor', icon: CheckSquare, section: 'Operations' },
   { to: '/management/approvals', label: 'Approvals', icon: CheckSquare, section: 'Operations' },
+  { to: '/management/approval-rules', label: 'Approval Rules', icon: Shield, section: 'Operations' },
   { to: '/management/admin', label: 'Admin', icon: Settings, section: 'Admin' },
   { to: '/management/audit', label: 'Audit Trail', icon: ClipboardList, section: 'Admin' },
 ];
