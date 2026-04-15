@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from database import audit_logs_col
 from bson import ObjectId
 
-async def log_audit(user_id: str, action: str, module: str, entity_type: str, entity_id: str = None, changes: dict = None, details: str = None):
+async def log_audit(user_id: str, action: str, module: str, entity_type: str, entity_id: str = None, changes: dict = None, details: str = None, before_value: dict = None, after_value: dict = None):
     entry = {
         "user_id": user_id,
         "action": action,
@@ -11,6 +11,8 @@ async def log_audit(user_id: str, action: str, module: str, entity_type: str, en
         "entity_id": entity_id,
         "changes": changes,
         "details": details,
+        "before_value": before_value,
+        "after_value": after_value,
         "timestamp": datetime.now(timezone.utc),
     }
     await audit_logs_col.insert_one(entry)

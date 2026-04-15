@@ -8,11 +8,12 @@ import { Separator } from '../components/ui/separator';
 import { Badge } from '../components/ui/badge';
 import {
   LayoutDashboard, DollarSign, Package, FileText, Settings, CheckSquare,
-  ClipboardList, ChevronLeft, ChevronRight, LogOut, Bell, Building2, ChefHat, Menu, X, Factory
+  ClipboardList, ChevronLeft, ChevronRight, LogOut, Bell, Building2, ChefHat, Menu, X, Factory, AlertTriangle, BarChart3
 } from 'lucide-react';
 
 const navItems = [
   { to: '/management/dashboard', label: 'Dashboard', icon: LayoutDashboard, section: 'Executive' },
+  { to: '/management/alerts', label: 'Alerts', icon: AlertTriangle, section: 'Executive' },
   { to: '/management/coa', label: 'Chart of Accounts', icon: DollarSign, section: 'Finance' },
   { to: '/management/journals', label: 'Journal Entries', icon: DollarSign, section: 'Finance' },
   { to: '/management/finance', label: 'Cash & Bank', icon: DollarSign, section: 'Finance' },
@@ -21,6 +22,7 @@ const navItems = [
   { to: '/management/recipes', label: 'Recipe & BOM', icon: ChefHat, section: 'Inventory' },
   { to: '/management/production', label: 'Production Orders', icon: Factory, section: 'Inventory' },
   { to: '/management/reports', label: 'Reports', icon: FileText, section: 'Reports' },
+  { to: '/management/variance', label: 'Variance', icon: BarChart3, section: 'Reports' },
   { to: '/management/closing-monitor', label: 'Closing Monitor', icon: CheckSquare, section: 'Operations' },
   { to: '/management/approvals', label: 'Approvals', icon: CheckSquare, section: 'Operations' },
   { to: '/management/admin', label: 'Admin', icon: Settings, section: 'Admin' },

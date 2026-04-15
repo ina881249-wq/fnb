@@ -1,30 +1,30 @@
 [
   {
-    "content": "Phase 1A (remaining): Auto-post journals from finance transactions",
+    "content": "Phase 1C: Variance Report (theoretical vs actual + thresholds)",
     "status": "completed"
   },
   {
-    "content": "Phase 1B: Recipe / BOM Consumption Engine",
+    "content": "Phase 1C: Exception Alerts Engine + Dashboard feed",
     "status": "completed"
   },
   {
-    "content": "Phase 1B: Production / Prep Orders with Kanban status",
+    "content": "Phase 1C: Audit Trail Upgrade (before/after values)",
     "status": "completed"
   },
   {
-    "content": "Phase 1B: Stock Movement Enterprise Upgrade (types, reason codes, transit)",
+    "content": "Phase 1D: Server-side pagination on journal entries page",
     "status": "completed"
   },
   {
-    "content": "Phase 1B: Frontend - Recipe/BOM page + Production page + enhanced nav",
+    "content": "Phase 1D: Enhanced search/filter on alerts + variance pages",
     "status": "completed"
   },
   {
-    "content": "Phase 1B: Seed data for recipes (3 sample recipes)",
+    "content": "Phase 1D: Empty states with CTAs on all new pages",
     "status": "completed"
   },
   {
-    "content": "Phase 1B: End to End Testing",
-    "status": "pending"
+    "content": "Phase 1C+1D: Updated sidebar navigation (15 menu items)",
+    "status": "completed"
   }
 ]

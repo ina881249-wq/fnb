@@ -20,6 +20,8 @@ import ReconciliationPage from './pages/management/ReconciliationPage';
 import ClosingMonitorPage from './pages/management/ClosingMonitorPage';
 import RecipeBOMPage from './pages/management/RecipeBOMPage';
 import ProductionPage from './pages/management/ProductionPage';
+import VariancePage from './pages/management/VariancePage';
+import AlertsPage from './pages/management/AlertsPage';
 import OutletDashboard from './pages/outlet/OutletDashboard';
 import CashManagement from './pages/outlet/CashManagement';
 import SalesSummary from './pages/outlet/SalesSummary';
@@ -71,6 +73,8 @@ function AppRoutes() {
         <Route path="recipes" element={<RecipeBOMPage />} />
         <Route path="production" element={<ProductionPage />} />
         <Route path="reports" element={<ReportsPage />} />
+        <Route path="variance" element={<VariancePage />} />
+        <Route path="alerts" element={<AlertsPage />} />
         <Route path="admin" element={<AdminPage />} />
         <Route path="approvals" element={<ApprovalsPage />} />
         <Route path="audit" element={<AuditTrailPage />} />

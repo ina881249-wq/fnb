@@ -36,6 +36,7 @@ daily_closings_col = db["daily_closings"]
 recipes_col = db["recipes"]
 recipe_lines_col = db["recipe_lines"]
 production_orders_col = db["production_orders"]
+alerts_col = db["alerts"]
 
 async def create_indexes():
     await users_col.create_index("email", unique=True)
@@ -66,3 +67,5 @@ async def create_indexes():
     await recipes_col.create_index("output_item_id")
     await recipe_lines_col.create_index("recipe_id")
     await production_orders_col.create_index([("outlet_id", 1), ("status", 1)])
+    await alerts_col.create_index([("created_at", -1)])
+    await alerts_col.create_index([("outlet_id", 1), ("resolved", 1)])

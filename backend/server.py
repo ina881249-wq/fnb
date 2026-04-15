@@ -25,6 +25,8 @@ from routers.reconciliation_router import router as recon_router
 from routers.closing_router import router as closing_router
 from routers.recipe_router import router as recipe_router
 from routers.production_router import router as production_router
+from routers.variance_router import router as variance_router
+from routers.alerts_router import router as alerts_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -67,6 +69,8 @@ app.include_router(recon_router)
 app.include_router(closing_router)
 app.include_router(recipe_router)
 app.include_router(production_router)
+app.include_router(variance_router)
+app.include_router(alerts_router)
 
 # Health check
 @app.get("/api/health")
