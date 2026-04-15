@@ -1,26 +1,38 @@
 [
   {
-    "content": "Sprint B2: Bank Statement Import + Matching Engine",
+    "content": "Executive Portal: Backend analytics API (7 endpoints)",
     "status": "completed"
   },
   {
-    "content": "Sprint C1: Recipe Versioning & Approval (backend APIs)",
+    "content": "Executive Portal: Layout + Navigation (6 tabs)",
     "status": "completed"
   },
   {
-    "content": "Sprint C2: Production Kanban Board (Kanban/List toggle)",
+    "content": "Executive Portal: Overview (8 KPIs + Revenue Trend + Revenue Split)",
     "status": "completed"
   },
   {
-    "content": "Sprint C3: Variance Root Cause Capture (reason codes + explain dialog)",
+    "content": "Executive Portal: Revenue Analytics (channel breakdown, daily/weekly/monthly)",
     "status": "completed"
   },
   {
-    "content": "Sprint C4: Exception Center Upgrade (acknowledge/escalate/categories)",
+    "content": "Executive Portal: Expense Analytics (category pie, daily trend, by outlet)",
     "status": "completed"
   },
   {
-    "content": "All 3 Hardening Sprints: COMPLETE",
+    "content": "Executive Portal: Outlet Performance (ranking, chart, metric selector)",
+    "status": "completed"
+  },
+  {
+    "content": "Executive Portal: Inventory Health (health score, category breakdown)",
+    "status": "completed"
+  },
+  {
+    "content": "Executive Portal: Control Tower (priority cards, alert feed, resolve)",
+    "status": "completed"
+  },
+  {
+    "content": "Portal Selector: Updated with Executive as first portal (6 total)",
     "status": "completed"
   }
 ]

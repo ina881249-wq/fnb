@@ -33,6 +33,7 @@ from routers.recurring_router import router as recurring_router
 from routers.drilldown_router import router as drilldown_router
 from routers.bank_statement_router import router as bank_statement_router
 from routers.enhancements_router import router as enhancements_router
+from routers.executive_router import router as executive_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -83,6 +84,7 @@ app.include_router(recurring_router)
 app.include_router(drilldown_router)
 app.include_router(bank_statement_router)
 app.include_router(enhancements_router)
+app.include_router(executive_router)
 
 # Health check
 @app.get("/api/health")

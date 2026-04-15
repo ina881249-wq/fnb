@@ -34,6 +34,13 @@ import SalesSummary from './pages/outlet/SalesSummary';
 import PettyCash from './pages/outlet/PettyCash';
 import InventoryOutlet from './pages/outlet/InventoryOutlet';
 import DailyClosing from './pages/outlet/DailyClosing';
+import ExecutiveLayout from './layouts/ExecutiveLayout';
+import ExecOverview from './pages/executive/ExecOverview';
+import ExecRevenue from './pages/executive/ExecRevenue';
+import ExecExpenses from './pages/executive/ExecExpenses';
+import ExecOutlets from './pages/executive/ExecOutlets';
+import ExecInventory from './pages/executive/ExecInventory';
+import ControlTower from './pages/executive/ControlTower';
 import './App.css';
 
 const ProtectedRoute = ({ children }) => {
@@ -89,6 +96,17 @@ function AppRoutes() {
         <Route path="approval-rules" element={<ApprovalRulesPage />} />
         <Route path="audit" element={<AuditTrailPage />} />
         <Route index element={<Navigate to="dashboard" />} />
+      </Route>
+
+      {/* Executive Portal */}
+      <Route path="/executive" element={<ProtectedRoute><ExecutiveLayout /></ProtectedRoute>}>
+        <Route path="overview" element={<ExecOverview />} />
+        <Route path="revenue" element={<ExecRevenue />} />
+        <Route path="expenses" element={<ExecExpenses />} />
+        <Route path="outlets" element={<ExecOutlets />} />
+        <Route path="inventory" element={<ExecInventory />} />
+        <Route path="control-tower" element={<ControlTower />} />
+        <Route index element={<Navigate to="overview" />} />
       </Route>
 
       {/* Outlet Portal */}

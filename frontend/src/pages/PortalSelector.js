@@ -6,12 +6,13 @@ import { useLang } from '../context/LangContext';
 import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
-import { Building2, Store, ChefHat, CreditCard, Warehouse, Lock, LogOut, Sun, Moon, Languages } from 'lucide-react';
+import { Building2, Store, ChefHat, CreditCard, Warehouse, Lock, LogOut, Sun, Moon, Languages, BarChart3 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
 const portalConfig = [
-  { id: 'management', name: 'Management Portal', description: 'Global visibility for directors, executives, finance leaders', icon: Building2, color: 'from-teal-500/20 to-cyan-500/20', borderColor: 'border-teal-500/30', status: 'active' },
-  { id: 'outlet', name: 'Outlet Portal', description: 'Outlet-level control for managers and staff', icon: Store, color: 'from-cyan-500/20 to-blue-500/20', borderColor: 'border-cyan-500/30', status: 'active' },
+  { id: 'executive', name: 'Executive Portal', description: 'Data analytics, performance insights, and control tower', icon: BarChart3, color: 'from-teal-500/20 to-emerald-500/20', borderColor: 'border-teal-500/30', status: 'active' },
+  { id: 'management', name: 'Management Portal', description: 'Finance, operations, inventory, and admin management', icon: Building2, color: 'from-cyan-500/20 to-blue-500/20', borderColor: 'border-cyan-500/30', status: 'active' },
+  { id: 'outlet', name: 'Outlet Portal', description: 'Outlet-level daily operations and controls', icon: Store, color: 'from-blue-500/20 to-indigo-500/20', borderColor: 'border-blue-500/30', status: 'active' },
   { id: 'kitchen', name: 'Kitchen Portal', description: 'Production tasks for kitchen and prep staff', icon: ChefHat, color: 'from-amber-500/20 to-orange-500/20', borderColor: 'border-amber-500/30', status: 'coming_soon' },
   { id: 'cashier', name: 'Cashier Portal', description: 'Transaction capture for front-line staff', icon: CreditCard, color: 'from-green-500/20 to-emerald-500/20', borderColor: 'border-green-500/30', status: 'coming_soon' },
   { id: 'warehouse', name: 'Warehouse Portal', description: 'Receiving and stock movement management', icon: Warehouse, color: 'from-purple-500/20 to-indigo-500/20', borderColor: 'border-purple-500/30', status: 'coming_soon' },
@@ -25,7 +26,9 @@ export default function PortalSelector() {
 
   const handleSelectPortal = (portalId) => {
     selectPortal(portalId);
-    if (portalId === 'management') {
+    if (portalId === 'executive') {
+      navigate('/executive/overview');
+    } else if (portalId === 'management') {
       navigate('/management/dashboard');
     } else if (portalId === 'outlet') {
       navigate('/outlet/dashboard');
