@@ -1,50 +1,26 @@
 [
   {
-    "content": "Sprint A1: Reusable DataTable component",
+    "content": "Sprint B2: Bank Statement Import + Matching Engine",
     "status": "completed"
   },
   {
-    "content": "Sprint A2: Global Command Palette (Ctrl+K)",
+    "content": "Sprint C1: Recipe Versioning & Approval (backend APIs)",
     "status": "completed"
   },
   {
-    "content": "Sprint A3: DataTable applied to Audit Trail + Approvals (with bulk approve)",
+    "content": "Sprint C2: Production Kanban Board (Kanban/List toggle)",
     "status": "completed"
   },
   {
-    "content": "Sprint A4: Outlet Task Home",
+    "content": "Sprint C3: Variance Root Cause Capture (reason codes + explain dialog)",
     "status": "completed"
   },
   {
-    "content": "Sprint B1: Journal clone + batch post + templates API",
+    "content": "Sprint C4: Exception Center Upgrade (acknowledge/escalate/categories)",
     "status": "completed"
   },
   {
-    "content": "Sprint B3: Approval Delegation API (create/list/revoke)",
+    "content": "All 3 Hardening Sprints: COMPLETE",
     "status": "completed"
-  },
-  {
-    "content": "Sprint B5: Closing reopen request flow (creates approval)",
-    "status": "completed"
-  },
-  {
-    "content": "Sprint B2: Bank Statement Import (reconciliation assistant)",
-    "status": "pending"
-  },
-  {
-    "content": "Sprint C1: Recipe Versioning & Approval",
-    "status": "pending"
-  },
-  {
-    "content": "Sprint C2: Production Kanban Board",
-    "status": "pending"
-  },
-  {
-    "content": "Sprint C3: Variance Root Cause Capture",
-    "status": "pending"
-  },
-  {
-    "content": "Sprint C4: Exception Center Upgrade",
-    "status": "pending"
   }
 ]
