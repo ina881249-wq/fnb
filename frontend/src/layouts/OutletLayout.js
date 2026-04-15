@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
+import { useLang } from '../context/LangContext';
 import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
 import {
   LayoutDashboard, DollarSign, FileText, Package, Receipt, Store,
-  LogOut, Bell, ArrowLeft, Menu, X
+  LogOut, Bell, ArrowLeft, Menu, X, Sun, Moon, Languages
 } from 'lucide-react';
 
 const outletNavItems = [
@@ -20,6 +22,8 @@ const outletNavItems = [
 
 export default function OutletLayout() {
   const { user, logout, outlets, currentOutlet, selectOutlet, hasOutletAccess } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
+  const { lang, changeLang } = useLang();
   const navigate = useNavigate();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -42,7 +46,7 @@ export default function OutletLayout() {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Top bar */}
-      <header className="h-14 border-b border-[var(--glass-border)] flex items-center justify-between px-4 lg:px-6 bg-[hsl(222,35%,8%)]/90 backdrop-blur-md sticky top-0 z-30">
+      <header className="h-14 border-b border-[var(--glass-border)] flex items-center justify-between px-4 lg:px-6 bg-[hsl(var(--background))]/90 backdrop-blur-md sticky top-0 z-30">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => navigate('/portal-select')} className="gap-1.5" data-testid="back-to-portal">
             <ArrowLeft className="w-4 h-4" />
@@ -66,7 +70,13 @@ export default function OutletLayout() {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          <Button variant="ghost" size="sm" onClick={() => changeLang(lang === 'en' ? 'id' : 'en')} className="h-8 px-2 text-xs gap-1" data-testid="outlet-lang-toggle">
+            <Languages className="w-3.5 h-3.5" /><span className="hidden sm:inline uppercase font-semibold">{lang}</span>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={toggleTheme} className="h-8 w-8 p-0" data-testid="outlet-theme-toggle">
+            {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </Button>
           <Button variant="ghost" size="sm" className="lg:hidden" onClick={() => setMobileNavOpen(!mobileNavOpen)}>
             {mobileNavOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
           </Button>
@@ -86,7 +96,7 @@ export default function OutletLayout() {
       </header>
 
       {/* Sub-navigation */}
-      <nav className={`border-b border-[var(--glass-border)] bg-[hsl(222,35%,7%)] ${mobileNavOpen ? 'block' : 'hidden lg:block'}`}>
+      <nav className={`border-b border-[var(--glass-border)] bg-[hsl(var(--card))] ${mobileNavOpen ? 'block' : 'hidden lg:block'}`}>
         <div className="max-w-[1400px] mx-auto px-4 lg:px-6">
           <div className="flex items-center gap-1 overflow-x-auto py-2">
             {outletNavItems.map((item) => {

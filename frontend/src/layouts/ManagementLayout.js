@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
+import { useLang } from '../context/LangContext';
 import { ScrollArea } from '../components/ui/scroll-area';
 import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -8,7 +10,7 @@ import { Separator } from '../components/ui/separator';
 import { Badge } from '../components/ui/badge';
 import {
   LayoutDashboard, DollarSign, Package, FileText, Settings, CheckSquare,
-  ClipboardList, ChevronLeft, ChevronRight, LogOut, Bell, Building2, ChefHat, Menu, X, Factory, AlertTriangle, BarChart3, Target, Repeat, TrendingUp, Shield
+  ClipboardList, ChevronLeft, ChevronRight, LogOut, Bell, Building2, ChefHat, Menu, X, Factory, AlertTriangle, BarChart3, Target, Repeat, TrendingUp, Shield, Sun, Moon, Languages
 } from 'lucide-react';
 
 const navItems = [
@@ -35,6 +37,8 @@ const navItems = [
 
 export default function ManagementLayout() {
   const { user, logout, outlets, currentOutlet, selectOutlet } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
+  const { lang, changeLang, t } = useLang();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -49,7 +53,7 @@ export default function ManagementLayout() {
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed lg:sticky top-0 h-screen z-50 transition-all duration-300 bg-[hsl(222,35%,8%)] border-r border-[var(--glass-border)] flex flex-col
+      <aside className={`fixed lg:sticky top-0 h-screen z-50 transition-all duration-300 bg-[hsl(var(--card))] border-r border-[var(--glass-border)] flex flex-col
         ${collapsed ? 'w-[72px]' : 'w-[var(--sidebar-width)]'}
         ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
       >
@@ -116,7 +120,7 @@ export default function ManagementLayout() {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
-        <header className="h-[var(--topbar-height)] border-b border-[var(--glass-border)] flex items-center justify-between px-4 lg:px-6 bg-[hsl(222,35%,8%)]/80 backdrop-blur-md sticky top-0 z-30">
+        <header className="h-[var(--topbar-height)] border-b border-[var(--glass-border)] flex items-center justify-between px-4 lg:px-6 bg-[hsl(var(--background))]/80 backdrop-blur-md sticky top-0 z-30">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" className="lg:hidden" onClick={() => setMobileOpen(true)}>
               <Menu className="w-5 h-5" />
@@ -134,7 +138,16 @@ export default function ManagementLayout() {
               </SelectContent>
             </Select>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            {/* Language Toggle */}
+            <Button variant="ghost" size="sm" onClick={() => changeLang(lang === 'en' ? 'id' : 'en')} className="h-8 px-2 text-xs gap-1" data-testid="lang-toggle" title={lang === 'en' ? 'Switch to Bahasa Indonesia' : 'Switch to English'}>
+              <Languages className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline uppercase font-semibold">{lang}</span>
+            </Button>
+            {/* Theme Toggle */}
+            <Button variant="ghost" size="sm" onClick={toggleTheme} className="h-8 w-8 p-0" data-testid="theme-toggle" title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
+              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </Button>
             <Button variant="ghost" size="sm" className="relative" data-testid="notifications-bell">
               <Bell className="w-4 h-4" />
             </Button>

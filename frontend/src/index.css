@@ -4,7 +4,8 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+/* ========== DARK THEME (default) ========== */
+:root, .dark {
   --background: 222 35% 6%;
   --foreground: 210 25% 96%;
   --card: 222 35% 8%;
@@ -40,11 +41,46 @@
   --topbar-height: 56px;
 }
 
+/* ========== LIGHT THEME ========== */
+.light {
+  --background: 210 20% 98%;
+  --foreground: 222 35% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 35% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 35% 12%;
+  --primary: 174 84% 35%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 210 18% 94%;
+  --secondary-foreground: 222 35% 12%;
+  --muted: 210 14% 92%;
+  --muted-foreground: 215 16% 47%;
+  --accent: 198 92% 45%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 72% 52%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 210 14% 89%;
+  --input: 210 14% 89%;
+  --ring: 174 84% 35%;
+  --radius: 0.9rem;
+  --chart-1: 174 84% 35%;
+  --chart-2: 198 92% 45%;
+  --chart-3: 43 92% 48%;
+  --chart-4: 0 72% 52%;
+  --chart-5: 262 70% 52%;
+  --glass-bg: rgba(255,255,255,0.70);
+  --glass-bg-strong: rgba(255,255,255,0.85);
+  --glass-border: rgba(0,0,0,0.08);
+  --glass-border-strong: rgba(0,0,0,0.12);
+  --glass-shadow: 0 8px 32px rgba(0,0,0,0.08);
+  --glass-shadow-soft: 0 4px 16px rgba(0,0,0,0.05);
+  --sidebar-width: 280px;
+  --topbar-height: 56px;
+}
+
 body {
   margin: 0;
   font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
-  background-color: hsl(222 35% 6%);
-  color: hsl(210 25% 96%);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

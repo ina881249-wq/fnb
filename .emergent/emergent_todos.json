@@ -1,14 +1,22 @@
 [
   {
-    "content": "Phase 2A #15: Multi-level Reporting Drill-down",
+    "content": "UI Polish: Light/Dark theme tokens + context + toggle",
     "status": "completed"
   },
   {
-    "content": "Phase 2A #13: Approval Rules Management UI",
+    "content": "Light/Dark Mode: Applied to ManagementLayout, OutletLayout, LoginPage, PortalSelector",
     "status": "completed"
   },
   {
-    "content": "Phase 2A: All features complete",
+    "content": "i18n: Language context + EN/ID translations (100+ keys) + switcher on all pages",
+    "status": "completed"
+  },
+  {
+    "content": "Remove 'Made with Emergent' badge from index.html",
+    "status": "completed"
+  },
+  {
+    "content": "Sidebar/Topbar backgrounds use CSS variables (theme-aware)",
     "status": "completed"
   }
 ]

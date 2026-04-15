@@ -1,10 +1,12 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
+import { useLang } from '../context/LangContext';
 import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
-import { Building2, Store, ChefHat, CreditCard, Warehouse, Lock, LogOut } from 'lucide-react';
+import { Building2, Store, ChefHat, CreditCard, Warehouse, Lock, LogOut, Sun, Moon, Languages } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
 const portalConfig = [
@@ -17,6 +19,8 @@ const portalConfig = [
 
 export default function PortalSelector() {
   const { user, hasPortalAccess, selectPortal, logout } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
+  const { lang, changeLang, t } = useLang();
   const navigate = useNavigate();
 
   const handleSelectPortal = (portalId) => {
@@ -37,12 +41,20 @@ export default function PortalSelector() {
         {/* Header */}
         <div className="flex items-center justify-between mb-12">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: 'Space Grotesk' }}>Select Portal</h1>
-            <p className="text-[hsl(var(--muted-foreground))] mt-1">Welcome, {user?.name}. Choose your workspace.</p>
+            <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: 'Space Grotesk' }}>{t('portal.select')}</h1>
+            <p className="text-[hsl(var(--muted-foreground))] mt-1">{t('portal.welcome', { name: user?.name })}</p>
           </div>
-          <Button variant="outline" onClick={logout} className="gap-2 border-[var(--glass-border)]" data-testid="logout-button">
-            <LogOut className="w-4 h-4" /> Sign Out
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => changeLang(lang === 'en' ? 'id' : 'en')} className="h-8 px-2 text-xs gap-1">
+              <Languages className="w-3.5 h-3.5" /><span className="uppercase font-semibold">{lang}</span>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={toggleTheme} className="h-8 w-8 p-0">
+              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </Button>
+            <Button variant="outline" onClick={logout} className="gap-2 border-[var(--glass-border)]" data-testid="logout-button">
+            <LogOut className="w-4 h-4" /> {t('common.sign_out')}
           </Button>
+          </div>
         </div>
 
         {/* Portal grid */}
@@ -75,7 +87,7 @@ export default function PortalSelector() {
                         <p className="text-xs text-[hsl(var(--muted-foreground))] leading-relaxed">{portal.description}</p>
                         {isComingSoon && (
                           <Badge variant="outline" className="mt-3 text-[10px] border-amber-500/30 text-amber-400">
-                            Coming Soon
+                            {t('portal.coming_soon')}
                           </Badge>
                         )}
                         {!isComingSoon && !hasPortalAccess(portal.id) && (

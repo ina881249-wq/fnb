@@ -1,6 +1,8 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
+import { LangProvider } from './context/LangContext';
 import { Toaster } from './components/ui/sonner';
 import LoginPage from './pages/LoginPage';
 import PortalSelector from './pages/PortalSelector';
@@ -112,12 +114,16 @@ function AppRoutes() {
 function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <div className="min-h-screen bg-[hsl(var(--background))] text-[hsl(var(--foreground))]">
-          <AppRoutes />
-          <Toaster position="top-right" richColors />
-        </div>
-      </AuthProvider>
+      <ThemeProvider>
+        <LangProvider>
+          <AuthProvider>
+            <div className="min-h-screen bg-[hsl(var(--background))] text-[hsl(var(--foreground))]">
+              <AppRoutes />
+              <Toaster position="top-right" richColors />
+            </div>
+          </AuthProvider>
+        </LangProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }
