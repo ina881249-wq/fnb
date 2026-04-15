@@ -1,54 +1,54 @@
 [
   {
     "content": "Phase 1: Get design guidelines (glassmorphism style)",
-    "status": "in_progress"
+    "status": "completed"
   },
   {
     "content": "Phase 1: Install all backend & frontend dependencies",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Phase 2: Build backend core (Auth, RBAC, Users, Outlets, Approvals, Audit, WebSocket)",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Phase 2: Build backend Finance & Accounting module",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Phase 2: Build backend Inventory module",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Phase 2: Build backend Reporting & Export module",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Phase 2: Build backend Seed Data (demo outlets + sample data)",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Phase 2: Build frontend Portal Selector + Auth + Layout",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Phase 2: Build frontend Management Portal (Dashboard, Admin, Finance, Inventory, Reports)",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Phase 2: Build frontend Outlet Portal (Dashboard, Cash, Sales, Inventory, Petty Cash)",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Phase 2: Build frontend Coming Soon portals (Kitchen, Cashier, Warehouse)",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Phase 2: All user stories covered in Development",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Phase 2: End to End Testing using Testing Agent",
-    "status": "pending"
+    "status": "in_progress"
   }
 ]
