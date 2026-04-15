@@ -49,6 +49,10 @@
   },
   {
     "content": "Phase 2: End to End Testing using Testing Agent",
-    "status": "in_progress"
+    "status": "completed"
+  },
+  {
+    "content": "Phase 2: Fixed serialize_doc bug (id field) and outlet auto-selection",
+    "status": "completed"
   }
 ]

@@ -21,10 +21,10 @@ def serialize_doc(doc: dict) -> dict:
         return None
     result = {}
     for key, value in doc.items():
-        if isinstance(value, ObjectId):
-            result[key] = str(value)
-        elif key == "_id":
+        if key == "_id":
             result["id"] = str(value)
+        elif isinstance(value, ObjectId):
+            result[key] = str(value)
         elif isinstance(value, datetime):
             result[key] = value.isoformat()
         elif isinstance(value, list):

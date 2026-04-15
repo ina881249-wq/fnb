@@ -26,7 +26,12 @@ export default function OutletLayout() {
   useEffect(() => {
     if (!currentOutlet && outlets.length > 0) {
       const accessible = outlets.find(o => hasOutletAccess(o.id));
-      if (accessible) selectOutlet(accessible.id);
+      if (accessible) {
+        selectOutlet(accessible.id);
+      } else if (outlets.length === 1) {
+        // If only one outlet visible, auto-select it
+        selectOutlet(outlets[0].id);
+      }
     }
   }, [currentOutlet, outlets, hasOutletAccess, selectOutlet]);
 
