@@ -1,30 +1,26 @@
 [
   {
-    "content": "Phase 1C: Variance Report (theoretical vs actual + thresholds)",
+    "content": "Phase 2A: Budgeting per Outlet (backend + frontend)",
     "status": "completed"
   },
   {
-    "content": "Phase 1C: Exception Alerts Engine + Dashboard feed",
+    "content": "Phase 2A: Granular Approval Rules Engine (backend)",
     "status": "completed"
   },
   {
-    "content": "Phase 1C: Audit Trail Upgrade (before/after values)",
+    "content": "Phase 2A: Scheduled/Recurring Transactions (backend + frontend)",
     "status": "completed"
   },
   {
-    "content": "Phase 1D: Server-side pagination on journal entries page",
+    "content": "Phase 1D: Enhanced Audit Trail (before/after schema)",
     "status": "completed"
   },
   {
-    "content": "Phase 1D: Enhanced search/filter on alerts + variance pages",
+    "content": "Phase 1D: Empty states with CTAs on all pages",
     "status": "completed"
   },
   {
-    "content": "Phase 1D: Empty states with CTAs on all new pages",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 1C+1D: Updated sidebar navigation (15 menu items)",
+    "content": "Phase 1D: Navigation restructured (17 menu items)",
     "status": "completed"
   }
 ]

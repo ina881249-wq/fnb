@@ -8,7 +8,7 @@ import { Separator } from '../components/ui/separator';
 import { Badge } from '../components/ui/badge';
 import {
   LayoutDashboard, DollarSign, Package, FileText, Settings, CheckSquare,
-  ClipboardList, ChevronLeft, ChevronRight, LogOut, Bell, Building2, ChefHat, Menu, X, Factory, AlertTriangle, BarChart3
+  ClipboardList, ChevronLeft, ChevronRight, LogOut, Bell, Building2, ChefHat, Menu, X, Factory, AlertTriangle, BarChart3, Target, Repeat
 } from 'lucide-react';
 
 const navItems = [
@@ -18,6 +18,8 @@ const navItems = [
   { to: '/management/journals', label: 'Journal Entries', icon: DollarSign, section: 'Finance' },
   { to: '/management/finance', label: 'Cash & Bank', icon: DollarSign, section: 'Finance' },
   { to: '/management/reconciliation', label: 'Reconciliation', icon: DollarSign, section: 'Finance' },
+  { to: '/management/budgeting', label: 'Budgeting', icon: Target, section: 'Finance' },
+  { to: '/management/recurring', label: 'Recurring', icon: Repeat, section: 'Finance' },
   { to: '/management/inventory', label: 'Items & Stock', icon: Package, section: 'Inventory' },
   { to: '/management/recipes', label: 'Recipe & BOM', icon: ChefHat, section: 'Inventory' },
   { to: '/management/production', label: 'Production Orders', icon: Factory, section: 'Inventory' },

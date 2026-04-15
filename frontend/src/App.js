@@ -22,6 +22,8 @@ import RecipeBOMPage from './pages/management/RecipeBOMPage';
 import ProductionPage from './pages/management/ProductionPage';
 import VariancePage from './pages/management/VariancePage';
 import AlertsPage from './pages/management/AlertsPage';
+import BudgetingPage from './pages/management/BudgetingPage';
+import RecurringPage from './pages/management/RecurringPage';
 import OutletDashboard from './pages/outlet/OutletDashboard';
 import CashManagement from './pages/outlet/CashManagement';
 import SalesSummary from './pages/outlet/SalesSummary';
@@ -68,6 +70,8 @@ function AppRoutes() {
         <Route path="coa" element={<COAPage />} />
         <Route path="journals" element={<JournalEntriesPage />} />
         <Route path="reconciliation" element={<ReconciliationPage />} />
+        <Route path="budgeting" element={<BudgetingPage />} />
+        <Route path="recurring" element={<RecurringPage />} />
         <Route path="closing-monitor" element={<ClosingMonitorPage />} />
         <Route path="inventory" element={<InventoryPage />} />
         <Route path="recipes" element={<RecipeBOMPage />} />

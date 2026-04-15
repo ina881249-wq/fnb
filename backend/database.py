@@ -37,6 +37,9 @@ recipes_col = db["recipes"]
 recipe_lines_col = db["recipe_lines"]
 production_orders_col = db["production_orders"]
 alerts_col = db["alerts"]
+budgets_col = db["budgets"]
+approval_rules_col = db["approval_rules"]
+recurring_transactions_col = db["recurring_transactions"]
 
 async def create_indexes():
     await users_col.create_index("email", unique=True)
@@ -69,3 +72,6 @@ async def create_indexes():
     await production_orders_col.create_index([("outlet_id", 1), ("status", 1)])
     await alerts_col.create_index([("created_at", -1)])
     await alerts_col.create_index([("outlet_id", 1), ("resolved", 1)])
+    await budgets_col.create_index([("outlet_id", 1), ("period", 1)])
+    await approval_rules_col.create_index("transaction_type")
+    await recurring_transactions_col.create_index([("status", 1), ("next_run", 1)])

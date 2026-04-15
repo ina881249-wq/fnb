@@ -27,6 +27,9 @@ from routers.recipe_router import router as recipe_router
 from routers.production_router import router as production_router
 from routers.variance_router import router as variance_router
 from routers.alerts_router import router as alerts_router
+from routers.budget_router import router as budget_router
+from routers.approval_rules_router import router as approval_rules_router
+from routers.recurring_router import router as recurring_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -71,6 +74,9 @@ app.include_router(recipe_router)
 app.include_router(production_router)
 app.include_router(variance_router)
 app.include_router(alerts_router)
+app.include_router(budget_router)
+app.include_router(approval_rules_router)
+app.include_router(recurring_router)
 
 # Health check
 @app.get("/api/health")
