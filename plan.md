@@ -1,169 +1,226 @@
 # plan.md
 
 ## 1) Objectives
-- Deliver a production-quality **Phase 1 control layer** for a multi-outlet F&B ERP using a **modular-monolith** backend (FastAPI + MongoDB) and a **React glassmorphism UI**.
-- Implement deeply:
-  - **Phase 1 (Complete):** Core ERP (Users/Outlets), **custom RBAC**, Approvals, Audit trail, WebSocket foundation, Finance/Accounting, Inventory, Reporting + Export.
-  - **Phase 2 (Shell + UX Ready):** Portal split UX is in place and **Kitchen/Cashier/Warehouse** portals are visible as **Coming Soon** to ensure future rollout without redesign.
-- Establish from day-1 (already delivered): **WebSocket foundation**, **customizable RBAC** (custom roles + configurable permissions), **approval workflows**, **audit trail**, **Excel/PDF export**.
-- Provide **portal selector login UX** and strict **outlet-scoped access control**; ship with **2–3 demo outlets** + sample seeded data.
+- Stabilize and **perfect Phase 1 & Phase 2** (existing build) so the product moves from:
+  - **system of record → system of control**
+  - **passive dashboards → workflow-based operations**
+  - **data lists → decision + action layer**
+- Keep architecture as **modular monolith** (FastAPI + MongoDB) with strict domain boundaries so future phases can be added without redesign.
+- Implement the **Feature Enhancement Backlog** (saved as the source-of-truth in `/app/memory/FEATURE_BACKLOG.md`) **phase-by-phase** with explicit acceptance criteria to ensure nothing is missed.
+- Elevate accounting/inventory accuracy and auditability:
+  - Double-entry accounting via **Journal Engine**
+  - Strong controls via **reconciliation, daily closing, approvals, and alerts**
+- Upgrade UI to an enterprise operational cockpit:
+  - pagination/search/filter/saved views/bulk actions
+  - workflow-first screens
+  - consistent menu structure and contextual actions
 
-> Current status: **Phase 2 is complete** and verified via screenshots. Backend automated tests passed **100%**; frontend automated tests ~**85%** with minor timing/navigation artifacts in the test agent (real behavior verified). Critical fixes applied: `serialize_doc` id mapping and outlet auto-selection.
+> Current status: **Original Phase 1 & 2 baseline build is COMPLETE** (auth/RBAC, finance, inventory, reporting/export, approvals, audit, portals + UX). Next work is **Enhancement Phase 1A → 1D**, then **Enhancement Phase 2A → 2B**.
+
+---
 
 ## 2) Implementation Steps
 
-### Phase 1 — Core POC (Isolation) (must pass before full build)
-**Core to prove:** outlet-scoped RBAC + portal access + approval + audit + WebSocket eventing (the control plane that everything depends on).
+### Phase 1 — Core POC (Isolation) (Completed)
+**Core proven:** outlet-scoped RBAC + portal access + approvals + audit + WebSocket foundation.
 
-User stories:
-1. As an admin, I can define a custom role with granular permissions so teams match real operations.
-2. As a manager, I can only see outlets assigned to me so data remains isolated.
-3. As an outlet staff, I can only log into the Outlet Portal for my outlet so mistakes are prevented.
-4. As an approver, I can approve/reject a request and see it fully audited so controls are enforceable.
-5. As a user, I see real-time status updates (WebSocket) for approvals so I don’t need to refresh.
+Delivered:
+- JWT auth, password hashing
+- Custom RBAC (permission catalog + custom roles)
+- Outlet scoping enforced on API
+- Approval workflow (submit/approve/reject) + audit log
+- WebSocket base for notifications
+- Portal selector with coming-soon portals
 
-Steps (Completed):
-- Created modular backend foundation with routers + shared utilities.
-- Implemented:
-  - Entities: User, Outlet, Role, Permission catalog, ApprovalRequest, AuditLog.
-  - Portal login guard: allowed portals + outlet scope.
-  - Approval flow: submit → pending → approve/reject + audit entries.
-  - WebSocket endpoint and broadcast manager foundation.
-- Created minimal frontend baseline:
-  - Login + Portal Selector (all portals shown; Phase 2 portals “Coming Soon”).
+Exit criteria: Met.
 
-POC exit criteria (Met):
-- All RBAC/outlet scoping behaviors verified.
-- API endpoints functional and testable.
+---
 
-### Phase 2 — V1 App Development (build around proven core)
-User stories:
-1. As a user, I can pick a portal at login and clearly see which outlet I’m operating in.
-2. As an admin, I can manage outlets, users, roles, permissions, and approval routes from one place.
-3. As finance, I can record cash/bank/petty-cash movements and see accurate ledgers per outlet.
-4. As inventory control, I can perform stock movements and conversions with traceability.
-5. As executives, I can view drill-down dashboards and export reports to Excel/PDF.
+### Phase 2 — V1 App Baseline (Completed)
+Delivered baseline product spanning:
+- **Management Portal (7 pages)**: Dashboard, Finance, Inventory, Reports (Excel/PDF export), Admin (users/roles/outlets), Approvals, Audit.
+- **Outlet Portal (5 pages)**: Dashboard, Cash, Sales Summary, Petty Cash, Inventory.
+- Seed data: 3 outlets + sample accounts/items/sales/cash/petty-cash.
 
-Backend (modular monolith) — **Completed**:
-- Structure: `routers/` + shared `utils/` with clear domain boundaries.
-- Core ERP:
-  - Outlets CRUD, Users CRUD, Roles CRUD.
-  - RBAC: permission catalog + custom role creation.
-  - Audit trail: append-only audit log.
-  - WebSocket: foundation endpoint + outlet/portal broadcast.
-- Finance & Accounting (Phase 1 deep):
-  - Accounts (bank/outlet_cash/petty_cash/clearing).
-  - Cash movements (cash_in/cash_out/transfer/settlement).
-  - Sales summaries (manual POS substitute).
-  - Period close entity (MVP).
-- Inventory (Phase 1 deep):
-  - Item master + UOM + material level.
-  - Material hierarchy links.
-  - Stock movements (count/adjustment/waste/transfer).
-  - Conversions with yield/loss.
-  - Stock-on-hand + low-stock alerts via WS.
-- Reporting:
-  - P&L, cashflow, balance sheet, inventory valuation, inventory movement report.
-  - Export: Excel + PDF endpoints.
-- Seed data:
-  - 3 outlets, multiple users/roles, accounts, items, stock, cash movements, petty cash, sales summaries.
+Hardening fixes applied:
+- `_id` serialization corrected → `id` for frontend consistency
+- Outlet portal auto-select outlet for assigned users
 
-Frontend (React glassmorphism) — **Completed**:
-- Global glassmorphism theme tokens implemented.
-- Portal Selector implemented:
-  - Management + Outlet active.
-  - Kitchen/Cashier/Warehouse visible as “Coming Soon”.
-- Management Portal (7 pages) implemented:
-  - Dashboard (KPIs + charts)
-  - Finance
-  - Inventory
-  - Reports (with export actions)
-  - Admin (users/roles/outlets + permission assignment)
-  - Approvals
-  - Audit Trail
-- Outlet Portal (5 pages) implemented:
-  - Outlet Dashboard
-  - Cash Management
-  - Sales Summary
-  - Petty Cash
-  - Inventory
+Exit criteria: Met (backend tests 100%, manual UI verification complete).
 
-Fixes applied during Phase 2 hardening:
-- Fixed serialization bug: `_id` now correctly mapped to `id` (impacted outlet selection and scoping in UI).
-- Strengthened outlet auto-selection in Outlet portal.
+---
 
-End Phase 2 verification (Met):
-- Backend tests: **100%** passing.
-- Frontend tests: ~**85%** (minor navigation timing artifacts in test agent).
-- Manual verification via screenshots confirmed:
-  - Finance page loads correctly.
-  - Outlet portal auto-selects assigned outlet and shows scoped data.
+## Enhancement Roadmap (NEW) — Focus on perfecting Phase 1 & 2 first
 
-### Phase 3 — Phase 2 Modules (deeper) + hardening (Next)
-User stories:
-1. As kitchen staff, I can record prep production and see required inputs so production is controlled.
-2. As supervisors, I can approve production batches and see yield/loss so variance is visible.
-3. As warehouse staff, I can receive stock and transfer to outlets so stock is accurate.
-4. As cashiers, I can access a dedicated portal (even if POS is later) so UX is role-specific.
-5. As admins, I can enable/disable portals per outlet so rollout is controlled.
+### Enhancement Phase 1A — Finance Control Core (START HERE)
+Goal: make finance/accounting **control-grade** with double-entry, reconciliation, and daily locking.
 
-Steps (Planned):
-- Kitchen/Production Portal (Phase 2 real build):
-  - Production batch entity tied to conversions (raw→prep→sub-prep).
-  - Batch yield/loss capture.
-  - Approval + audit + WebSocket status updates.
-- Warehouse Portal:
-  - Receiving workflow + transfer-out + approvals.
-  - Stock movement enhancements: supplier, PO ref (optional), receiving variance.
-- Cashier Portal:
-  - Dedicated sales capture UX (still manual until POS integration).
-  - Outlet cash allocation + reconciliation.
-- Hardening:
-  - Idempotency for postings, stronger validations, more indexes.
-  - Expand export formats and improve drill-down experiences.
+#### Scope (Features)
+1) **Journal Engine / Double Entry Accounting**
+- Add Journal module:
+  - journal header + journal lines (debit/credit)
+  - source document reference (cash movement, petty cash, settlement, sales summary, adjustments)
+  - posting date, outlet scope
+  - status: draft, posted, reversed
+- All finance transactions must go through **posting service**.
+- Reports (P&L/cashflow/balance sheet/equity) must be derived from **journals** (source-of-truth).
+- UI: Management → Finance & Accounting → Journal Entries (list + filters + detail view).
 
-End Phase 3:
-- E2E test pass including production + warehouse + cashier flows; regression on Phase 1–2.
+2) **COA Management (Chart of Accounts) — tree/hierarchy**
+- COA tree (parent-child), account types (asset/liability/equity/revenue/expense/cogs)
+- active/inactive, report mapping
+- support dimensions (future-ready): outlet/city/cost center/analytic tag
+- UI: Management → Finance & Accounting → Chart of Accounts (tree view + search + inline edit).
 
-### Phase 4 — Authentication + security + production readiness (Later)
-User stories:
-1. As a user, I can login via email/password securely and reset my password.
-2. As an admin, I can enforce password policy and optionally enable 2FA for privileged roles.
-3. As compliance, I can search audit logs by user/outlet/action so investigations are fast.
-4. As finance, I can run period close confidently knowing postings are locked.
-5. As ops, I can import/export safely with clear error feedback.
+3) **Cash Reconciliation & Bank Reconciliation**
+- expected vs actual amount, difference, variance reason, approval status
+- reconciliation per outlet/account/period
+- rule: daily closing cannot lock if mismatch unresolved
+- UI:
+  - Management → Finance & Accounting → Reconciliation (wizard/stepper)
+  - Outlet → Cash & Bank → Daily Cash Review (summary + variance submit)
 
-Steps (Planned):
-- Auth hardening:
-  - Password reset flow.
-  - Optional 2FA for privileged roles.
-  - Session/token lifecycle improvements.
-- RBAC hardening:
-  - Permission matrix UX improvements.
-  - Portal/outlet assignment UX improvements.
-- Audit trail:
-  - Advanced filtering + export.
-- Import/Export:
-  - Excel import templates + validation report.
-- Test coverage:
-  - Expand automated UI tests and reduce flakiness by stabilizing waits and adding deterministic `data-testid` coverage.
+4) **Daily Closing Outlet (workflow + lock)**
+- daily status per outlet: open → in_progress → submitted → approved → locked
+- checklist:
+  - sales summary complete
+  - petty cash complete
+  - stock movement complete
+  - cash reconciliation complete
+- after locked: edits require privileged override + audit trail
+- UI:
+  - Outlet → Tasks & Closing → Daily Closing (stepper)
+  - Management → Operations → Outlet Closing Monitor
+
+#### User stories
+- Finance can view journal entries and trace them to source documents.
+- Every cash movement / petty cash expense / settlement / sales summary generates correct debit-credit postings.
+- Finance can reconcile cash/bank and approve variances.
+- Outlet manager can complete daily checklist and submit closing.
+- Locked day cannot be edited except via override with audit.
+
+#### Backend work
+- New collections (minimum):
+  - `coa_accounts`
+  - `journals` (header)
+  - `journal_lines`
+  - `reconciliations`
+  - `daily_closings`
+- New routers (suggested):
+  - `/api/coa/*`
+  - `/api/journals/*`
+  - `/api/reconciliation/*`
+  - `/api/daily-closing/*`
+- Refactor existing finance endpoints to call:
+  - `posting_service.post_cash_movement(...)`
+  - `posting_service.post_petty_cash_expense(...)`
+  - `posting_service.post_sales_summary(...)`
+- Update reporting endpoints to query journals.
+
+#### Frontend work
+- New management pages:
+  - COA Management
+  - Journal Entries
+  - Reconciliation (wizard)
+  - Outlet Closing Monitor
+- New outlet pages:
+  - Daily Cash Review (reconciliation summary)
+  - Daily Closing (stepper)
+- Add server-side pagination primitives to existing lists.
+
+#### Acceptance criteria
+- Creating any finance transaction results in balanced journal lines (total debit == total credit).
+- Reports match journal totals.
+- Closing cannot reach locked when reconciliation mismatch unresolved.
+- Audit shows who locked and who overrode.
+
+---
+
+### Enhancement Phase 1B — Inventory Control Core
+Goal: inventory becomes production-aware and sales-consumption-aware.
+
+Scope:
+- **Recipe/BOM engine** (raw → prep → sub-prep → menu)
+- **Consumption engine** (from sales summary now; POS later)
+- **Production / Prep Orders** (batch, yield/loss, statuses; management UI; kitchen portal later)
+- **Enterprise stock movement upgrades**:
+  - expanded movement types
+  - mandatory reason codes
+  - approvals for certain movements
+  - transfer workflow with transit tracking
+
+Key outputs:
+- Theoretical consumption computed and posted.
+- Stock reduced by BOM consumption.
+- Production outputs roll up cost.
+
+---
+
+### Enhancement Phase 1C — Control Layer (Decision + Action)
+Goal: exception-first monitoring and operational investigation.
+
+Scope:
+- **Variance Report** (theoretical vs actual) by outlet/item/period + thresholds
+- **Exception Alerts engine**:
+  - low stock, cash mismatch, overdue closing, missing submissions, unusual expense, high variance
+  - WebSocket notify + dashboard feed
+- **Audit Trail operational upgrade**:
+  - before_value/after_value
+  - filter by outlet/user/module/transaction
+  - export support
+
+---
+
+### Enhancement Phase 1D — UI/UX Best Practices (applies to all modules)
+Goal: make UI enterprise-grade for daily operations.
+
+Scope:
+- Server-side pagination (10/20/50) across all long lists
+- Search global + per module
+- Smart filter + saved views
+- Sort + sticky headers + column visibility
+- Bulk actions (approve many, export selected, batch close)
+- Empty/loading/error states (skeletons + CTA)
+- Contextual actions only
+- Responsive optimizations for outlet/tablet
+- Workflow-first screens (daily tasks → actions → closing)
+- Implement the recommended menu structure (Management + Outlet) from backlog
+
+---
+
+### Enhancement Phase 2A — Scale & Control Lanjutan
+Scope:
+- Budgeting per outlet (budget vs actual, burn rate)
+- Granular approvals (rule-based: type/amount/outlet/role, chains/escalation/delegation)
+- Scheduled/Recurring transactions (draft auto-generated + review + approval)
+- Multi-level reporting drill-down (global → city → outlet → category → item → transaction) with breadcrumbs
+
+---
+
+### Enhancement Phase 2B — Portal Expansion (functional, not placeholders)
+Scope:
+- **Kitchen Portal**: production tasks (kanban), batch completion, yield/loss
+- **Warehouse Portal**: receiving, picking list, transfer requests, batch receipts
+
+---
 
 ## 3) Next Actions (immediate)
-1. Confirm which Phase 3 portal to build first:
-   - Kitchen/Production
-   - Warehouse
-   - Cashier
-2. Confirm MVP depth for Phase 3:
-   - Minimal workflows + approvals only, or full operational flow with reporting.
-3. Decide on inventory valuation method for accounting-grade reporting (current MVP uses simple cost-per-unit; can evolve to weighted average/FIFO).
-4. Add a WebSocket-driven notifications panel (UI) if you want real-time UX beyond toasts.
+1. Start **Enhancement Phase 1A** with the correct implementation order:
+   1) COA → 2) Journal Engine & Posting Service → 3) Refactor reports to journals → 4) Reconciliation → 5) Daily Closing
+2. Confirm MVP accounting policy assumptions for Phase 1A:
+   - COA structure depth
+   - Mapping rules for auto-journals (sales/cash/settlement/petty cash)
+3. Confirm whether outlet closing approval should be:
+   - manager only, or manager + finance chain
+4. After Phase 1A, proceed to Phase 1B.
+
+---
 
 ## 4) Success Criteria
-- Portal selector works; users can only access allowed portals and assigned outlets.
-- Custom roles/permissions enforced on API + UI; outlet scoping is strict.
-- Approval workflow functions end-to-end with immutable audit trail and WebSocket foundation.
-- Phase 1 finance + inventory core flows work and produce drill-down reports.
-- PDF/Excel export works for key reports.
-- Phase 2 portals are visible in UX with “Coming Soon” and do not break navigation.
-- Phase 2 delivered with seeded demo data (2–3 outlets) and verified manually + automated tests.
-- Phase 3 success: Kitchen/Warehouse/Cashier portals become functional (not just placeholders) with approvals, auditability, and reporting parity.
+- All transactions produce correct **double-entry journals** and reports derive from journals.
+- Reconciliation + variance approvals exist and block final locking when unresolved.
+- Daily outlet closing workflow exists (open → locked) with override + audit.
+- Inventory supports recipes/production and produces variance reporting.
+- Exception alerts highlight issues proactively (dashboard feed + WebSocket).
+- UI is operational-grade: pagination, search/filter/saved views, bulk actions, workflow-first screens.
+- Phase 1 & 2 enhancements delivered without missing any item from `/app/memory/FEATURE_BACKLOG.md`.

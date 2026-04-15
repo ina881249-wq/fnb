@@ -14,11 +14,16 @@ import ReportsPage from './pages/management/ReportsPage';
 import AdminPage from './pages/management/AdminPage';
 import ApprovalsPage from './pages/management/ApprovalsPage';
 import AuditTrailPage from './pages/management/AuditTrailPage';
+import COAPage from './pages/management/COAPage';
+import JournalEntriesPage from './pages/management/JournalEntriesPage';
+import ReconciliationPage from './pages/management/ReconciliationPage';
+import ClosingMonitorPage from './pages/management/ClosingMonitorPage';
 import OutletDashboard from './pages/outlet/OutletDashboard';
 import CashManagement from './pages/outlet/CashManagement';
 import SalesSummary from './pages/outlet/SalesSummary';
 import PettyCash from './pages/outlet/PettyCash';
 import InventoryOutlet from './pages/outlet/InventoryOutlet';
+import DailyClosing from './pages/outlet/DailyClosing';
 import './App.css';
 
 const ProtectedRoute = ({ children }) => {
@@ -56,6 +61,10 @@ function AppRoutes() {
       <Route path="/management" element={<ProtectedRoute><ManagementLayout /></ProtectedRoute>}>
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="finance" element={<FinancePage />} />
+        <Route path="coa" element={<COAPage />} />
+        <Route path="journals" element={<JournalEntriesPage />} />
+        <Route path="reconciliation" element={<ReconciliationPage />} />
+        <Route path="closing-monitor" element={<ClosingMonitorPage />} />
         <Route path="inventory" element={<InventoryPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="admin" element={<AdminPage />} />
@@ -71,6 +80,7 @@ function AppRoutes() {
         <Route path="sales" element={<SalesSummary />} />
         <Route path="petty-cash" element={<PettyCash />} />
         <Route path="inventory" element={<InventoryOutlet />} />
+        <Route path="closing" element={<DailyClosing />} />
         <Route index element={<Navigate to="dashboard" />} />
       </Route>
 

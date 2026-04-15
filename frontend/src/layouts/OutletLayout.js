@@ -15,6 +15,7 @@ const outletNavItems = [
   { to: '/outlet/sales', label: 'Sales Summary', icon: FileText },
   { to: '/outlet/petty-cash', label: 'Petty Cash', icon: Receipt },
   { to: '/outlet/inventory', label: 'Inventory', icon: Package },
+  { to: '/outlet/closing', label: 'Daily Closing', icon: Store },
 ];
 
 export default function OutletLayout() {

@@ -1,58 +1,42 @@
 [
   {
-    "content": "Phase 1: Get design guidelines (glassmorphism style)",
+    "content": "Phase 1A: COA Management (Chart of Accounts tree hierarchy)",
     "status": "completed"
   },
   {
-    "content": "Phase 1: Install all backend & frontend dependencies",
+    "content": "Phase 1A: Journal Engine / Double Entry + Posting Service",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Build backend core (Auth, RBAC, Users, Outlets, Approvals, Audit, WebSocket)",
+    "content": "Phase 1A: Cash & Bank Reconciliation",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Build backend Finance & Accounting module",
+    "content": "Phase 1A: Daily Closing Outlet (workflow + lock)",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Build backend Inventory module",
+    "content": "Phase 1A: Update Management sidebar + new menu structure",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Build backend Reporting & Export module",
+    "content": "Phase 1A: Update Outlet portal with Daily Closing",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Build backend Seed Data (demo outlets + sample data)",
+    "content": "Phase 1A: Closing Monitor page for Management",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Build frontend Portal Selector + Auth + Layout",
-    "status": "completed"
+    "content": "Phase 1A: Refactor reports to derive from journals",
+    "status": "pending"
   },
   {
-    "content": "Phase 2: Build frontend Management Portal (Dashboard, Admin, Finance, Inventory, Reports)",
-    "status": "completed"
+    "content": "Phase 1A: Add server-side pagination to existing lists",
+    "status": "pending"
   },
   {
-    "content": "Phase 2: Build frontend Outlet Portal (Dashboard, Cash, Sales, Inventory, Petty Cash)",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 2: Build frontend Coming Soon portals (Kitchen, Cashier, Warehouse)",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 2: All user stories covered in Development",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 2: End to End Testing using Testing Agent",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 2: Fixed serialize_doc bug (id field) and outlet auto-selection",
-    "status": "completed"
+    "content": "Phase 1A: End to End Testing",
+    "status": "pending"
   }
 ]

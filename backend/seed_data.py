@@ -319,6 +319,72 @@ async def seed_data():
         await petty_cash_col.insert_many(pc_data)
     print(f"Created {len(pc_data)} petty cash entries")
     
+    # ===================== COA (Chart of Accounts) =====================
+    from database import coa_accounts_col
+    existing_coa = await coa_accounts_col.count_documents({})
+    if existing_coa == 0:
+        coa_accounts = [
+            # Assets
+            {"code": "1000", "name": "Assets", "account_type": "asset", "parent_id": None, "is_header": True, "normal_balance": "debit", "report_mapping": "balance_sheet", "active": True, "created_at": now},
+            {"code": "1100", "name": "Cash & Bank", "account_type": "asset", "parent_id": None, "is_header": True, "normal_balance": "debit", "report_mapping": "balance_sheet", "active": True, "created_at": now},
+            {"code": "1110", "name": "Bank Accounts", "account_type": "asset", "parent_id": None, "is_header": False, "normal_balance": "debit", "report_mapping": "balance_sheet", "active": True, "created_at": now},
+            {"code": "1120", "name": "Outlet Cash", "account_type": "asset", "parent_id": None, "is_header": False, "normal_balance": "debit", "report_mapping": "balance_sheet", "active": True, "created_at": now},
+            {"code": "1130", "name": "Petty Cash", "account_type": "asset", "parent_id": None, "is_header": False, "normal_balance": "debit", "report_mapping": "balance_sheet", "active": True, "created_at": now},
+            {"code": "1200", "name": "Inventory", "account_type": "asset", "parent_id": None, "is_header": False, "normal_balance": "debit", "report_mapping": "balance_sheet", "active": True, "created_at": now},
+            {"code": "1210", "name": "Raw Material Inventory", "account_type": "asset", "parent_id": None, "is_header": False, "normal_balance": "debit", "report_mapping": "balance_sheet", "active": True, "created_at": now},
+            {"code": "1220", "name": "Prep Material Inventory", "account_type": "asset", "parent_id": None, "is_header": False, "normal_balance": "debit", "report_mapping": "balance_sheet", "active": True, "created_at": now},
+            # Liabilities
+            {"code": "2000", "name": "Liabilities", "account_type": "liability", "parent_id": None, "is_header": True, "normal_balance": "credit", "report_mapping": "balance_sheet", "active": True, "created_at": now},
+            {"code": "2100", "name": "Accounts Payable", "account_type": "liability", "parent_id": None, "is_header": False, "normal_balance": "credit", "report_mapping": "balance_sheet", "active": True, "created_at": now},
+            {"code": "2200", "name": "Accrued Expenses", "account_type": "liability", "parent_id": None, "is_header": False, "normal_balance": "credit", "report_mapping": "balance_sheet", "active": True, "created_at": now},
+            # Equity
+            {"code": "3000", "name": "Equity", "account_type": "equity", "parent_id": None, "is_header": True, "normal_balance": "credit", "report_mapping": "balance_sheet", "active": True, "created_at": now},
+            {"code": "3100", "name": "Retained Earnings", "account_type": "equity", "parent_id": None, "is_header": False, "normal_balance": "credit", "report_mapping": "balance_sheet", "active": True, "created_at": now},
+            # Revenue
+            {"code": "4000", "name": "Revenue", "account_type": "revenue", "parent_id": None, "is_header": True, "normal_balance": "credit", "report_mapping": "pnl", "active": True, "created_at": now},
+            {"code": "4100", "name": "Food Sales", "account_type": "revenue", "parent_id": None, "is_header": False, "normal_balance": "credit", "report_mapping": "pnl", "active": True, "created_at": now},
+            {"code": "4200", "name": "Beverage Sales", "account_type": "revenue", "parent_id": None, "is_header": False, "normal_balance": "credit", "report_mapping": "pnl", "active": True, "created_at": now},
+            {"code": "4300", "name": "Delivery Sales", "account_type": "revenue", "parent_id": None, "is_header": False, "normal_balance": "credit", "report_mapping": "pnl", "active": True, "created_at": now},
+            {"code": "4900", "name": "Discounts & Returns", "account_type": "contra", "parent_id": None, "is_header": False, "normal_balance": "debit", "report_mapping": "pnl", "active": True, "created_at": now},
+            # COGS
+            {"code": "5000", "name": "Cost of Goods Sold", "account_type": "cogs", "parent_id": None, "is_header": True, "normal_balance": "debit", "report_mapping": "pnl", "active": True, "created_at": now},
+            {"code": "5100", "name": "Food COGS", "account_type": "cogs", "parent_id": None, "is_header": False, "normal_balance": "debit", "report_mapping": "pnl", "active": True, "created_at": now},
+            {"code": "5200", "name": "Beverage COGS", "account_type": "cogs", "parent_id": None, "is_header": False, "normal_balance": "debit", "report_mapping": "pnl", "active": True, "created_at": now},
+            {"code": "5300", "name": "Packaging COGS", "account_type": "cogs", "parent_id": None, "is_header": False, "normal_balance": "debit", "report_mapping": "pnl", "active": True, "created_at": now},
+            # Expenses
+            {"code": "6000", "name": "Operating Expenses", "account_type": "expense", "parent_id": None, "is_header": True, "normal_balance": "debit", "report_mapping": "pnl", "active": True, "created_at": now},
+            {"code": "6100", "name": "Wages & Salaries", "account_type": "expense", "parent_id": None, "is_header": False, "normal_balance": "debit", "report_mapping": "pnl", "active": True, "created_at": now},
+            {"code": "6200", "name": "Rent & Utilities", "account_type": "expense", "parent_id": None, "is_header": False, "normal_balance": "debit", "report_mapping": "pnl", "active": True, "created_at": now},
+            {"code": "6300", "name": "Transport & Delivery", "account_type": "expense", "parent_id": None, "is_header": False, "normal_balance": "debit", "report_mapping": "pnl", "active": True, "created_at": now},
+            {"code": "6400", "name": "Cleaning & Supplies", "account_type": "expense", "parent_id": None, "is_header": False, "normal_balance": "debit", "report_mapping": "pnl", "active": True, "created_at": now},
+            {"code": "6500", "name": "Repair & Maintenance", "account_type": "expense", "parent_id": None, "is_header": False, "normal_balance": "debit", "report_mapping": "pnl", "active": True, "created_at": now},
+            {"code": "6600", "name": "Marketing & Promotion", "account_type": "expense", "parent_id": None, "is_header": False, "normal_balance": "debit", "report_mapping": "pnl", "active": True, "created_at": now},
+            {"code": "6700", "name": "Office & Admin", "account_type": "expense", "parent_id": None, "is_header": False, "normal_balance": "debit", "report_mapping": "pnl", "active": True, "created_at": now},
+            {"code": "6800", "name": "Waste & Spoilage", "account_type": "expense", "parent_id": None, "is_header": False, "normal_balance": "debit", "report_mapping": "pnl", "active": True, "created_at": now},
+            {"code": "6900", "name": "Miscellaneous Expense", "account_type": "expense", "parent_id": None, "is_header": False, "normal_balance": "debit", "report_mapping": "pnl", "active": True, "created_at": now},
+        ]
+        # Set parent_ids based on hierarchy
+        inserted_coa = await coa_accounts_col.insert_many(coa_accounts)
+        coa_ids = {coa_accounts[i]["code"]: str(inserted_coa.inserted_ids[i]) for i in range(len(coa_accounts))}
+        # Update parent references
+        child_parent_map = {
+            "1100": "1000", "1110": "1100", "1120": "1100", "1130": "1100",
+            "1200": "1000", "1210": "1200", "1220": "1200",
+            "2100": "2000", "2200": "2000",
+            "3100": "3000",
+            "4100": "4000", "4200": "4000", "4300": "4000", "4900": "4000",
+            "5100": "5000", "5200": "5000", "5300": "5000",
+            "6100": "6000", "6200": "6000", "6300": "6000", "6400": "6000",
+            "6500": "6000", "6600": "6000", "6700": "6000", "6800": "6000", "6900": "6000",
+        }
+        for child_code, parent_code in child_parent_map.items():
+            if child_code in coa_ids and parent_code in coa_ids:
+                await coa_accounts_col.update_one(
+                    {"_id": ObjectId(coa_ids[child_code])},
+                    {"$set": {"parent_id": coa_ids[parent_code]}}
+                )
+        print(f"Created {len(coa_accounts)} COA accounts")
+    
     print("\n=== DEMO CREDENTIALS ===")
     print("Admin: admin@fnb.com / admin123 (All portals, all outlets)")
     print("Finance: finance@fnb.com / finance123 (Management portal)")

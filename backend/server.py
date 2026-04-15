@@ -19,6 +19,10 @@ from routers.finance_router import router as finance_router
 from routers.inventory_router import router as inventory_router
 from routers.reports_router import router as reports_router
 from routers.approvals_router import router as approvals_router
+from routers.coa_router import router as coa_router
+from routers.journal_router import router as journal_router
+from routers.reconciliation_router import router as recon_router
+from routers.closing_router import router as closing_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -55,6 +59,10 @@ app.include_router(finance_router)
 app.include_router(inventory_router)
 app.include_router(reports_router)
 app.include_router(approvals_router)
+app.include_router(coa_router)
+app.include_router(journal_router)
+app.include_router(recon_router)
+app.include_router(closing_router)
 
 # Health check
 @app.get("/api/health")

@@ -13,10 +13,14 @@ import {
 
 const navItems = [
   { to: '/management/dashboard', label: 'Dashboard', icon: LayoutDashboard, section: 'Executive' },
-  { to: '/management/finance', label: 'Finance', icon: DollarSign, section: 'Finance' },
+  { to: '/management/coa', label: 'Chart of Accounts', icon: DollarSign, section: 'Finance' },
+  { to: '/management/journals', label: 'Journal Entries', icon: DollarSign, section: 'Finance' },
+  { to: '/management/finance', label: 'Cash & Bank', icon: DollarSign, section: 'Finance' },
+  { to: '/management/reconciliation', label: 'Reconciliation', icon: DollarSign, section: 'Finance' },
   { to: '/management/inventory', label: 'Inventory', icon: Package, section: 'Inventory' },
   { to: '/management/reports', label: 'Reports', icon: FileText, section: 'Reports' },
-  { to: '/management/approvals', label: 'Approvals', icon: CheckSquare, section: 'Approvals' },
+  { to: '/management/closing-monitor', label: 'Closing Monitor', icon: CheckSquare, section: 'Operations' },
+  { to: '/management/approvals', label: 'Approvals', icon: CheckSquare, section: 'Operations' },
   { to: '/management/admin', label: 'Admin', icon: Settings, section: 'Admin' },
   { to: '/management/audit', label: 'Audit Trail', icon: ClipboardList, section: 'Admin' },
 ];

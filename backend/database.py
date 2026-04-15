@@ -27,8 +27,12 @@ stock_on_hand_col = db["stock_on_hand"]
 inventory_conversions_col = db["inventory_conversions"]
 accounting_periods_col = db["accounting_periods"]
 journals_col = db["journals"]
+journal_lines_col = db["journal_lines"]
 sales_summaries_col = db["sales_summaries"]
 notifications_col = db["notifications"]
+coa_accounts_col = db["coa_accounts"]
+reconciliations_col = db["reconciliations"]
+daily_closings_col = db["daily_closings"]
 
 async def create_indexes():
     await users_col.create_index("email", unique=True)
@@ -45,3 +49,13 @@ async def create_indexes():
     await stock_on_hand_col.create_index([("item_id", 1), ("outlet_id", 1)], unique=True)
     await stock_movements_col.create_index([("outlet_id", 1), ("created_at", -1)])
     await sales_summaries_col.create_index([("outlet_id", 1), ("date", -1)])
+    # Phase 1A new indexes
+    await coa_accounts_col.create_index("code", unique=True)
+    await coa_accounts_col.create_index("parent_id")
+    await journals_col.create_index([("posting_date", -1)])
+    await journals_col.create_index([("outlet_id", 1), ("posting_date", -1)])
+    await journals_col.create_index("journal_number")
+    await journal_lines_col.create_index("journal_id")
+    await journal_lines_col.create_index("account_id")
+    await reconciliations_col.create_index([("outlet_id", 1), ("date", -1)])
+    await daily_closings_col.create_index([("outlet_id", 1), ("date", -1)], unique=True)
