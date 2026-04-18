@@ -13,8 +13,8 @@ const portalConfig = [
   { id: 'executive', name: 'Executive Portal', description: 'Data analytics, performance insights, and control tower', icon: BarChart3, color: 'from-teal-500/20 to-emerald-500/20', borderColor: 'border-teal-500/30', status: 'active' },
   { id: 'management', name: 'Management Portal', description: 'Finance, operations, inventory, and admin management', icon: Building2, color: 'from-cyan-500/20 to-blue-500/20', borderColor: 'border-cyan-500/30', status: 'active' },
   { id: 'outlet', name: 'Outlet Portal', description: 'Outlet-level daily operations and controls', icon: Store, color: 'from-blue-500/20 to-indigo-500/20', borderColor: 'border-blue-500/30', status: 'active' },
+  { id: 'cashier', name: 'Cashier Portal', description: 'POS transactions, payment, and shift handling', icon: CreditCard, color: 'from-green-500/20 to-emerald-500/20', borderColor: 'border-green-500/30', status: 'active' },
   { id: 'kitchen', name: 'Kitchen Portal', description: 'Production tasks for kitchen and prep staff', icon: ChefHat, color: 'from-amber-500/20 to-orange-500/20', borderColor: 'border-amber-500/30', status: 'coming_soon' },
-  { id: 'cashier', name: 'Cashier Portal', description: 'Transaction capture for front-line staff', icon: CreditCard, color: 'from-green-500/20 to-emerald-500/20', borderColor: 'border-green-500/30', status: 'coming_soon' },
   { id: 'warehouse', name: 'Warehouse Portal', description: 'Receiving and stock movement management', icon: Warehouse, color: 'from-purple-500/20 to-indigo-500/20', borderColor: 'border-purple-500/30', status: 'coming_soon' },
 ];
 
@@ -32,6 +32,8 @@ export default function PortalSelector() {
       navigate('/management/dashboard');
     } else if (portalId === 'outlet') {
       navigate('/outlet/dashboard');
+    } else if (portalId === 'cashier') {
+      navigate('/cashier/dashboard');
     }
   };
 

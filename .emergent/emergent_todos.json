@@ -1,38 +1,34 @@
 [
   {
-    "content": "Executive Portal: Backend analytics API (7 endpoints)",
+    "content": "Backend: create cashier_router with POS orders, payments, shifts endpoints + DB collections",
     "status": "completed"
   },
   {
-    "content": "Executive Portal: Layout + Navigation (6 tabs)",
+    "content": "Backend: seed menu items (POS products with price) + demo cashier user",
     "status": "completed"
   },
   {
-    "content": "Executive Portal: Overview (8 KPIs + Revenue Trend + Revenue Split)",
+    "content": "Frontend: create CashierLayout (topbar + nav POS/Payment/Shift + outlet selector)",
     "status": "completed"
   },
   {
-    "content": "Executive Portal: Revenue Analytics (channel breakdown, daily/weekly/monthly)",
+    "content": "Frontend: POS page (menu grid + cart + checkout)",
     "status": "completed"
   },
   {
-    "content": "Executive Portal: Expense Analytics (category pie, daily trend, by outlet)",
+    "content": "Frontend: Payment/Orders page (list orders, pay, void)",
     "status": "completed"
   },
   {
-    "content": "Executive Portal: Outlet Performance (ranking, chart, metric selector)",
+    "content": "Frontend: Shift page (open/close shift + summary + variance)",
     "status": "completed"
   },
   {
-    "content": "Executive Portal: Inventory Health (health score, category breakdown)",
+    "content": "Activate Cashier portal in PortalSelector and routing in App.js",
     "status": "completed"
   },
   {
-    "content": "Executive Portal: Control Tower (priority cards, alert feed, resolve)",
-    "status": "completed"
-  },
-  {
-    "content": "Portal Selector: Updated with Executive as first portal (6 total)",
-    "status": "completed"
+    "content": "Run comprehensive backend + frontend tests via testing agent",
+    "status": "in_progress"
   }
 ]

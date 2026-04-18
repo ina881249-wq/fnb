@@ -454,11 +454,125 @@ async def seed_data():
         
         print("Created sample recipes")
     
+    # ===================== PHASE 3A — Cashier Menu & Users =====================
+    from database import menu_items_col
+    existing_menu = await menu_items_col.count_documents({})
+    if existing_menu == 0:
+        menu_defaults = [
+            # Makanan
+            {"name": "Nasi Rendang", "category": "Makanan", "price": 45000, "description": "Nasi dengan rendang khas Padang"},
+            {"name": "Nasi Ayam Goreng", "category": "Makanan", "price": 32000, "description": "Nasi dengan ayam goreng kremes"},
+            {"name": "Nasi Gurame Bakar", "category": "Makanan", "price": 55000, "description": "Nasi dengan ikan gurame bakar"},
+            {"name": "Nasi Soto Ayam", "category": "Makanan", "price": 30000, "description": "Soto ayam kuah bening"},
+            {"name": "Mie Goreng Spesial", "category": "Makanan", "price": 28000, "description": "Mie goreng dengan ayam & sayur"},
+            {"name": "Gado-gado", "category": "Makanan", "price": 25000, "description": "Sayur dengan bumbu kacang"},
+            {"name": "Nasi Ayam Sambal Matah", "category": "Makanan", "price": 38000, "description": "Nasi ayam dengan sambal matah"},
+            # Minuman
+            {"name": "Es Teh Manis", "category": "Minuman", "price": 8000, "description": "Teh dingin manis"},
+            {"name": "Teh Hangat", "category": "Minuman", "price": 6000, "description": "Teh panas"},
+            {"name": "Kopi Tubruk", "category": "Minuman", "price": 12000, "description": "Kopi hitam panas"},
+            {"name": "Es Jeruk", "category": "Minuman", "price": 12000, "description": "Jeruk peras dingin"},
+            {"name": "Air Mineral", "category": "Minuman", "price": 5000, "description": "Botol 600ml"},
+            # Pendamping
+            {"name": "Kerupuk", "category": "Pendamping", "price": 5000, "description": "Kerupuk putih"},
+            {"name": "Tempe Goreng", "category": "Pendamping", "price": 10000, "description": "3pcs tempe goreng"},
+            {"name": "Tahu Goreng", "category": "Pendamping", "price": 10000, "description": "3pcs tahu goreng"},
+            # Dessert
+            {"name": "Es Campur", "category": "Dessert", "price": 18000, "description": "Aneka buah & cincau"},
+            {"name": "Pisang Goreng", "category": "Dessert", "price": 15000, "description": "Pisang goreng madu"},
+        ]
+        for m in menu_defaults:
+            m.update({"active": True, "available_outlets": [], "created_at": now, "updated_at": now, "created_by": "system"})
+        await menu_items_col.insert_many(menu_defaults)
+        print(f"Created {len(menu_defaults)} menu items")
+    
+    # ===================== Extra: Cashier & Kitchen Roles + Users =====================
+    existing_cashier_role = await roles_col.find_one({"name": "Cashier"})
+    if not existing_cashier_role:
+        cashier_role = {
+            "name": "Cashier",
+            "description": "Point of sale operations",
+            "permissions": [
+                "cashier.pos.use", "cashier.shift.open", "cashier.shift.close",
+                "cashier.payments.process", "outlet.view_data",
+            ],
+            "portal_access": ["cashier"],
+            "is_system": True,
+            "created_at": now,
+            "updated_at": now,
+        }
+        cashier_role_id = (await roles_col.insert_one(cashier_role)).inserted_id
+        
+        # Demo cashier users per outlet
+        cashier_users = [
+            {
+                "email": "cashier.sudirman@fnb.com",
+                "password_hash": hash_password("cashier123"),
+                "name": "Rina Cashier Sudirman",
+                "role_ids": [cashier_role_id],
+                "portal_access": ["cashier"],
+                "outlet_access": [ObjectId(outlet_ids[0])],
+                "is_active": True,
+                "is_superadmin": False,
+                "created_at": now,
+                "updated_at": now,
+            },
+            {
+                "email": "cashier.kemang@fnb.com",
+                "password_hash": hash_password("cashier123"),
+                "name": "Dian Cashier Kemang",
+                "role_ids": [cashier_role_id],
+                "portal_access": ["cashier"],
+                "outlet_access": [ObjectId(outlet_ids[1])],
+                "is_active": True,
+                "is_superadmin": False,
+                "created_at": now,
+                "updated_at": now,
+            },
+        ]
+        await users_col.insert_many(cashier_users)
+        print(f"Created {len(cashier_users)} cashier users")
+
+    existing_kitchen_role = await roles_col.find_one({"name": "Kitchen Staff"})
+    if not existing_kitchen_role:
+        kitchen_role = {
+            "name": "Kitchen Staff",
+            "description": "Kitchen & prep team",
+            "permissions": [
+                "kitchen.queue.view", "kitchen.ticket.update", "kitchen.waste.log",
+                "inventory.view_items",
+            ],
+            "portal_access": ["kitchen"],
+            "is_system": True,
+            "created_at": now,
+            "updated_at": now,
+        }
+        kitchen_role_id = (await roles_col.insert_one(kitchen_role)).inserted_id
+        kitchen_users = [
+            {
+                "email": "chef.sudirman@fnb.com",
+                "password_hash": hash_password("kitchen123"),
+                "name": "Pak Joko Chef",
+                "role_ids": [kitchen_role_id],
+                "portal_access": ["kitchen"],
+                "outlet_access": [ObjectId(outlet_ids[0])],
+                "is_active": True,
+                "is_superadmin": False,
+                "created_at": now,
+                "updated_at": now,
+            },
+        ]
+        await users_col.insert_many(kitchen_users)
+        print(f"Created {len(kitchen_users)} kitchen users")
+    
     print("\n=== DEMO CREDENTIALS ===")
     print("Admin: admin@fnb.com / admin123 (All portals, all outlets)")
     print("Finance: finance@fnb.com / finance123 (Management portal)")
     print("Manager Sudirman: manager.sudirman@fnb.com / manager123 (Outlet portal, Sudirman only)")
     print("Manager Kemang: manager.kemang@fnb.com / manager123 (Outlet portal, Kemang only)")
     print("Inventory: inventory@fnb.com / inventory123 (Management portal)")
+    print("Cashier Sudirman: cashier.sudirman@fnb.com / cashier123 (Cashier portal)")
+    print("Cashier Kemang: cashier.kemang@fnb.com / cashier123 (Cashier portal)")
+    print("Kitchen Sudirman: chef.sudirman@fnb.com / kitchen123 (Kitchen portal)")
     print("========================\n")
     print("Seed complete!")

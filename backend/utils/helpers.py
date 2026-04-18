@@ -91,13 +91,31 @@ PERMISSION_CATALOG = {
             "approvals.submit",
         ]
     },
+    "cashier": {
+        "label": "Cashier (POS)",
+        "permissions": [
+            "cashier.pos.use",
+            "cashier.shift.open",
+            "cashier.shift.close",
+            "cashier.payments.process",
+            "cashier.menu.manage",
+        ]
+    },
+    "kitchen": {
+        "label": "Kitchen",
+        "permissions": [
+            "kitchen.queue.view",
+            "kitchen.ticket.update",
+            "kitchen.waste.log",
+        ]
+    },
 }
 
 PORTAL_LIST = [
     {"id": "executive", "name": "Executive Portal", "description": "Data analytics, performance insights, and control tower for directors", "icon": "bar-chart-3", "status": "active"},
     {"id": "management", "name": "Management Portal", "description": "Global visibility for finance, operations, and admin", "icon": "building-2", "status": "active"},
     {"id": "outlet", "name": "Outlet Portal", "description": "Outlet-level control for managers and staff", "icon": "store", "status": "active"},
+    {"id": "cashier", "name": "Cashier Portal", "description": "Point-of-sale, payment and shift handling for front-line staff", "icon": "credit-card", "status": "active"},
     {"id": "kitchen", "name": "Kitchen Portal", "description": "Production tasks for kitchen and prep staff", "icon": "chef-hat", "status": "coming_soon"},
-    {"id": "cashier", "name": "Cashier Portal", "description": "Transaction capture for front-line staff", "icon": "credit-card", "status": "coming_soon"},
     {"id": "warehouse", "name": "Warehouse Portal", "description": "Receiving and stock movement management", "icon": "warehouse", "status": "coming_soon"},
 ]

@@ -1,23 +1,19 @@
 # plan.md
 
 ## 1) Objectives
-- Stabilize and **perfect Phase 1 & Phase 2** (existing build) so the product moves from:
-  - **system of record → system of control**
-  - **passive dashboards → workflow-based operations**
-  - **data lists → decision + action layer**
-- Keep architecture as a **modular monolith** (FastAPI + MongoDB) with strict domain boundaries so future phases can be added without redesign.
-- Implement the **Feature Enhancement Backlog** (source-of-truth in `/app/memory/FEATURE_BACKLOG.md`) **phase-by-phase** with explicit acceptance criteria to ensure nothing is missed.
-- Ensure finance + inventory are **audit-grade** and **control-grade**:
+- Menjaga baseline yang sudah stabil (Phase 1 & 2) sambil memperluas platform menjadi **workflow operasional end-to-end** dari frontliner (Cashier/Kitchen) sampai kontrol (Outlet/Management/Executive).
+- Tetap memakai arsitektur **modular monolith** (FastAPI + MongoDB) dengan batas domain jelas (finance, inventory, approvals, closing, POS) agar portal baru bisa ditambahkan tanpa redesign.
+- Menjadikan finance + inventory **audit-grade** dan **control-grade**:
   - Double-entry accounting via **COA + Journal Engine + posting service**
-  - Strong operational controls via **reconciliation, daily closing, approvals, and alerts**
+  - Kontrol operasional via **reconciliation, daily closing, approvals, alerts**
   - Production-aware inventory via **recipes + production orders**
-  - Variance and exception monitoring for early anomaly detection
-- Upgrade UI into an enterprise operational cockpit:
-  - pagination/search/filter/saved views/bulk actions
-  - workflow-first screens
-  - consistent menu structure and contextual actions
+- Upgrade UI menjadi **enterprise operational cockpit**:
+  - DataTable standar (pagination/search/filter/sort)
+  - workflow-first screens untuk outlet ops
+  - konsistensi navigasi + tindakan kontekstual
+- Membangun **Cashier Portal & Kitchen Portal** sebagai sistem pencatat transaksi/produksi yang mengalir ke outlet closing dan approval.
 
-> Current status: **Original Phase 1 & 2 baseline build is COMPLETE**. Enhancement **Phase 1A, 1B, 1C are COMPLETE**. Enhancement **Phase 1D is PARTIALLY COMPLETE** (pagination/search/empty-states for new modules + navigation restructure). Next work is **finish Phase 1D** and then proceed to **Enhancement Phase 2A → 2B**.
+> Current status: **Original Phase 1 & 2 baseline build is COMPLETE**. Enhancement **Phase 1A, 1B, 1C are COMPLETE**. Enhancement **Phase 1D is PARTIALLY COMPLETE**. Mulai phase portal baru berdasarkan final production PDF, dengan prioritas: **Phase 3A Cashier Portal MVP (UI-first)**.
 
 ---
 
@@ -41,7 +37,7 @@ Exit criteria: Met.
 ### Phase 2 — V1 App Baseline (Completed)
 Delivered baseline product spanning:
 - **Management Portal**: Dashboard, Finance, Inventory, Reports (Excel/PDF export), Admin (users/roles/outlets), Approvals, Audit.
-- **Outlet Portal**: Dashboard, Cash, Sales Summary, Petty Cash, Inventory.
+- **Outlet Portal**: Dashboard, Cash, Sales Summary, Petty Cash, Inventory, Daily Closing.
 - Seed data: 3 outlets + sample accounts/items/sales/cash/petty-cash.
 
 Hardening fixes applied:
@@ -160,7 +156,7 @@ Goal: make UI enterprise-grade for daily operations.
 - Empty states and CTAs implemented across new modules.
 - Navigation/menu restructure implemented.
 
-#### Remaining Scope (Next)
+#### Remaining Scope (moved to Phase 3D hardening queue)
 - Server-side pagination (10/20/50) across **all long lists**:
   - sales summaries, cash movements, petty cash, stock movements, audit trail, approvals, items, recipes, production orders
 - Smart filters + saved views (per role) on key modules.
@@ -169,7 +165,6 @@ Goal: make UI enterprise-grade for daily operations.
   - approve multiple
   - resolve multiple alerts
   - export selected
-  - batch close outlet (future)
 - Global search (command palette) + structured search per module.
 - Workflow-first outlet screens:
   - “Today Tasks” → actions → daily closing
@@ -183,67 +178,149 @@ Goal: make UI enterprise-grade for daily operations.
 
 ---
 
-### Enhancement Phase 2A — Scale & Control Lanjutan (NEXT)
-Scope:
-1) **Budgeting per outlet**
-- Budget master per outlet/account/period
-- Budget vs actual report, burn rate, variance %
+## Phase 3 — Portal Expansion + End-to-End Ops (NEW; based on Final Production PDF)
 
-2) **Granular Approval Workflow**
-- rule-based approvals by transaction type, amount, outlet, role
-- approver chain + escalation + delegation
-- mandatory comments where configured
+### Phase 3A — Cashier Portal MVP (STARTING NOW; UI-first)
+**User decision:** mulai implementasi langsung. Hardware (printer struk, cash drawer) dibutuhkan nanti, namun **fokus UI-only dulu**.
 
-3) **Scheduled/Recurring Transactions**
-- recurring rules (daily/weekly/monthly)
-- auto-generate draft → review → approve
+#### PDF ringkas (poin kunci yang relevan)
+- Portal architecture: Executive / Management / Outlet / **Cashier** / **Kitchen**.
+- Daily closing flow end-to-end (high level):
+  1) Cashier closes shift
+  2) Outlet manager review cash & sales
+  3) System validates discrepancies
+  4) Submit for approval
+  5) Finance finalizes closing
+- Menu Cashier Portal: **POS, Payment, Shift**.
+- System flow (simplified): Cashier → Sales → Outlet Portal → Closing → Approval Engine → Management → Executive.
 
-4) **Multi-level reporting drill-down**
-- global → city → outlet → category → item → transaction
-- clickable drill-down + breadcrumbs
+#### Scope (MVP features)
+1) **POS (order entry UI)**
+- Pilih outlet (mengikuti currentOutlet dari AuthContext bila user punya akses)
+- Browse item/menu, search item
+- Keranjang order: qty, catatan/modifier sederhana (free-text untuk MVP)
+- Hitung subtotal/total (tax/discount optional untuk MVP, minimal total)
+- Simpan order sebagai draft / open order
 
-Exit criteria:
-- Budgets enforce monitoring (alerts when over budget optional).
-- Approval routing is configurable and auditable.
-- Recurring transactions reduce manual workload.
-- Drill-down reports enable investigation to source documents.
+2) **Payment (UI)**
+- Pilih metode bayar: cash / card / online / other (selaras dengan sales summary fields)
+- Input jumlah diterima (cash) + kembalian (UI)
+- Mark order as paid (UI + backend record)
+
+3) **Shift (Open/Close)**
+- Open shift: opening float
+- Close shift: hitung ringkasan transaksi shift (by payment type), input actual cash, variance
+- Generate “shift close submission” record untuk dipakai di daily closing outlet (Phase 3C)
+
+#### Backend (minimal supporting APIs & collections)
+- Tambah router baru: `pos_router.py` (atau `cashier_router.py`) di `/app/backend/routers`
+- Tambah collection (Mongo):
+  - `pos_orders` (order header)
+  - `pos_order_lines` (order lines) atau embedded array untuk MVP
+  - `cashier_shifts` (open/close, opening cash, closing cash, computed totals)
+  - `pos_payments` (optional; bisa embedded di order untuk MVP)
+- Endpoint minimal:
+  - `GET /api/pos/items` (reuse items; outlet scoping optional)
+  - `POST /api/pos/orders` create
+  - `GET /api/pos/orders?status=open|paid&outlet_id=` list
+  - `POST /api/pos/orders/{id}/pay`
+  - `POST /api/pos/shifts/open`
+  - `POST /api/pos/shifts/{id}/close`
+  - `GET /api/pos/shifts/current?outlet_id=`
+- RBAC/Permissions (baru):
+  - `cashier.pos.use`, `cashier.shift.open`, `cashier.shift.close`, `cashier.payments.process`
+
+#### Frontend
+- Tambah layout baru: `CashierLayout.js`
+- Tambah pages:
+  - `/cashier/pos`
+  - `/cashier/payment`
+  - `/cashier/shift`
+- Update routing di `App.js` + PortalSelector untuk mengaktifkan portal cashier (status active saat MVP siap)
+
+#### Acceptance criteria
+- User dengan akses portal cashier dapat login → pilih portal cashier → masuk ke Cashier UI.
+- Cashier bisa membuat order, menambahkan item, dan menyimpan.
+- Cashier bisa melakukan pembayaran dan order berubah status menjadi paid.
+- Cashier bisa open dan close shift; close menghasilkan ringkasan dan variance.
 
 ---
 
-### Enhancement Phase 2B — Portal Expansion (functional, not placeholders) (Later)
-Scope:
-- **Kitchen Portal**: production tasks (kanban), batch completion, yield/loss
-- **Warehouse Portal**: receiving, picking lists, transfer requests, batch receipts
+### Phase 3B — Kitchen Portal MVP
+#### Scope (MVP features)
+- **Queue**: daftar order paid yang perlu diproses (real-time nanti via WS; MVP polling)
+- **Prep**: ubah status order line / order: queued → in_progress → ready → served
+- **Waste**: log waste item (item, qty, reason) dan link ke outlet/date
 
-Exit criteria:
-- Kitchen/Warehouse portals are operational (not “coming soon”), scoped by outlet/warehouse and role.
+#### Backend
+- Router: `kitchen_router.py`
+- Collections:
+  - `kitchen_tickets` (atau reuse `pos_orders` dengan fields kitchen_status)
+  - `waste_logs`
+- Endpoint minimal:
+  - `GET /api/kitchen/queue?outlet_id=`
+  - `POST /api/kitchen/tickets/{id}/status`
+  - `POST /api/kitchen/waste`
+
+#### Acceptance criteria
+- Kitchen bisa melihat queue per outlet dan update status.
+- Waste tersimpan dan muncul di laporan/variance (integrasi detail di Phase 3C/3D).
+
+---
+
+### Phase 3C — End-to-end Daily Closing integration (Cashier ↔ Outlet Closing ↔ Approval)
+#### Scope
+- Integrasikan data **shift close** dari cashier ke Daily Closing Outlet:
+  - sales by payment type
+  - expected cash vs actual cash (variance)
+- Outlet manager review: tampilkan shift(s) hari itu + ringkasan
+- System validation: flag discrepancy (variance di atas threshold, missing shift close, dll)
+- Submit for approval: leverage approval engine existing
+- Finance finalize: tetap mengikuti daily closing locking existing + journal posting (bila diperlukan)
+
+#### Acceptance criteria
+- Daily Closing stepper di Outlet portal bisa menarik data shift yang closed untuk tanggal/outlet tersebut.
+- Closing submission memblok jika shift data belum lengkap atau variance belum diresolusikan sesuai rule.
+
+---
+
+### Phase 3D — Hardening (DataTable rollout + Auth hardening)
+#### Scope
+1) **DataTable standardization (server-side pagination + search/filter)**
+- Rollout ke list panjang: sales summaries, cash movements, petty cash, stock movements, audit trail, approvals, items, recipes, production orders
+
+2) **Auth & security hardening**
+- Password reset flow
+- Session timeout / refresh token strategy (jika diperlukan)
+- User invite (optional)
+- 2FA (later; jika belum prioritas)
+
+#### Acceptance criteria
+- Semua list utama punya pagination stabil + query params konsisten.
+- Auth lebih aman dan UX login lebih matang.
 
 ---
 
 ## 3) Next Actions (immediate)
-1) Decide execution order:
-   - **Option A (recommended)**: Finish **Phase 1D** (pagination/search/filter/bulk actions + journal-driven reports) before Phase 2A.
-   - Option B: Start **Phase 2A** first if scaling features are urgent.
-2) If choosing Option A, implement Phase 1D in this order:
-   1) Journal-driven P&L/Cashflow/Balance Sheet (single source-of-truth)
-   2) Pagination + page-size selector for all long lists
-   3) Saved views + filter panel pattern
-   4) Bulk actions + permission checks
-   5) Global search (command palette)
-3) If choosing Option B, start Phase 2A with:
-   1) Budgeting per outlet
-   2) Approval rules engine
+1) **Mulai Phase 3A (Cashier Portal MVP, UI-first)**
+   - Buat CashierLayout + routing
+   - Implement POS page (order entry)
+   - Implement Payment page (mark paid)
+   - Implement Shift page (open/close)
+2) Setelah Cashier MVP stabil, lanjut Phase 3B (Kitchen MVP).
+3) Integrasikan data shift ke Daily Closing (Phase 3C).
+4) Lakukan hardening UI/Auth (Phase 3D) dan menutup sisa Phase 1D.
 
 ---
 
 ## 4) Success Criteria
-- All transactions produce correct **double-entry journals** and reports derive from journals.
-- Reconciliation + variance controls block locking when unresolved.
-- Daily outlet closing workflow exists (open → locked) with override + audit.
-- Inventory supports recipes/production and variance reporting.
-- Exception alerts highlight issues proactively (dashboard feed + WebSocket foundation).
-- UI is operational-grade: pagination, search/filter/saved views, bulk actions, workflow-first screens.
-- Phase 1 & 2 enhancements delivered without missing any item from `/app/memory/FEATURE_BACKLOG.md`.
+- Semua transaksi operasional (POS, cash, petty cash, stock movement) dapat mengalir ke:
+  - approval (bila perlu)
+  - daily closing (outlet)
+  - reporting (management/executive)
+- Daily closing end-to-end berjalan sesuai flow PDF: cashier close shift → outlet review → system validate → submit approval → finance finalize/lock.
+- Finance tetap **double-entry**, dan laporan makin journal-driven.
+- UI operasional-grade: pagination/search/filter/saved views/bulk actions bertahap.
 
 ---
 
@@ -258,3 +335,9 @@ Exit criteria:
 
 ### Outlet Portal (6 tabs)
 Dashboard, Cash, Sales, Petty Cash, Inventory, Daily Closing
+
+### Cashier Portal (target; Phase 3A)
+POS, Payment, Shift
+
+### Kitchen Portal (target; Phase 3B)
+Queue, Prep, Waste

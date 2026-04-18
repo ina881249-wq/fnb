@@ -41,6 +41,11 @@ import ExecExpenses from './pages/executive/ExecExpenses';
 import ExecOutlets from './pages/executive/ExecOutlets';
 import ExecInventory from './pages/executive/ExecInventory';
 import ControlTower from './pages/executive/ControlTower';
+import CashierLayout from './layouts/CashierLayout';
+import CashierDashboard from './pages/cashier/CashierDashboard';
+import POSPage from './pages/cashier/POSPage';
+import OrdersPage from './pages/cashier/OrdersPage';
+import ShiftPage from './pages/cashier/ShiftPage';
 import './App.css';
 
 const ProtectedRoute = ({ children }) => {
@@ -117,6 +122,15 @@ function AppRoutes() {
         <Route path="petty-cash" element={<PettyCash />} />
         <Route path="inventory" element={<InventoryOutlet />} />
         <Route path="closing" element={<DailyClosing />} />
+        <Route index element={<Navigate to="dashboard" />} />
+      </Route>
+
+      {/* Cashier Portal */}
+      <Route path="/cashier" element={<ProtectedRoute><CashierLayout /></ProtectedRoute>}>
+        <Route path="dashboard" element={<CashierDashboard />} />
+        <Route path="pos" element={<POSPage />} />
+        <Route path="orders" element={<OrdersPage />} />
+        <Route path="shift" element={<ShiftPage />} />
         <Route index element={<Navigate to="dashboard" />} />
       </Route>
 

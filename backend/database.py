@@ -40,6 +40,12 @@ alerts_col = db["alerts"]
 budgets_col = db["budgets"]
 approval_rules_col = db["approval_rules"]
 recurring_transactions_col = db["recurring_transactions"]
+# Phase 3A — Cashier Portal collections
+menu_items_col = db["menu_items"]
+cashier_shifts_col = db["cashier_shifts"]
+pos_orders_col = db["pos_orders"]
+# Phase 3B — Kitchen Portal collections
+waste_logs_col = db["waste_logs"]
 
 async def create_indexes():
     await users_col.create_index("email", unique=True)
@@ -75,3 +81,13 @@ async def create_indexes():
     await budgets_col.create_index([("outlet_id", 1), ("period", 1)])
     await approval_rules_col.create_index("transaction_type")
     await recurring_transactions_col.create_index([("status", 1), ("next_run", 1)])
+    # Phase 3A indexes
+    await menu_items_col.create_index("name")
+    await menu_items_col.create_index("category")
+    await cashier_shifts_col.create_index([("outlet_id", 1), ("status", 1), ("opened_at", -1)])
+    await cashier_shifts_col.create_index("cashier_id")
+    await pos_orders_col.create_index([("outlet_id", 1), ("created_at", -1)])
+    await pos_orders_col.create_index("shift_id")
+    await pos_orders_col.create_index("order_number")
+    await pos_orders_col.create_index([("kitchen_status", 1), ("outlet_id", 1)])
+    await waste_logs_col.create_index([("outlet_id", 1), ("date", -1)])

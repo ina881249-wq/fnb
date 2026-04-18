@@ -10,7 +10,7 @@ import json
 from datetime import datetime, timedelta
 
 class FnBERPTester:
-    def __init__(self, base_url="https://doc-system-build-1.preview.emergentagent.com"):
+    def __init__(self, base_url="https://outlet-hub-system.preview.emergentagent.com"):
         self.base_url = base_url
         self.token = None
         self.user_data = None
@@ -235,6 +235,232 @@ class FnBERPTester:
         success, data, status = self.make_request('POST', 'inventory/items', item_data, expected_status=200)
         self.log_result("Create Inventory Item", success and 'id' in data)
 
+    def test_cashier_menu(self):
+        """Test cashier menu endpoints"""
+        # Get outlets first to use in menu tests
+        success, data, status = self.make_request('GET', 'finance/accounts')
+        outlet_id = None
+        if success and data.get('accounts'):
+            for acc in data['accounts']:
+                if acc.get('outlet_id'):
+                    outlet_id = acc['outlet_id']
+                    break
+        
+        if not outlet_id:
+            # Try to get outlets from a different endpoint
+            success, data, status = self.make_request('GET', 'core/outlets')
+            if success and data.get('outlets'):
+                outlet_id = data['outlets'][0].get('_id') or data['outlets'][0].get('id')
+        
+        # Test menu list
+        params = {'outlet_id': outlet_id} if outlet_id else {}
+        success, data, status = self.make_request('GET', 'cashier/menu', params=params)
+        expected_keys = ['items', 'categories', 'total']
+        has_keys = all(key in data for key in expected_keys) if success else False
+        self.log_result("Get Cashier Menu", success and has_keys)
+        
+        # Store menu items for later tests
+        if success and data.get('items'):
+            self.menu_items = data['items'][:3]  # Store first 3 items
+        else:
+            self.menu_items = []
+
+    def test_cashier_shifts(self):
+        """Test cashier shift management"""
+        # Get outlets first
+        success, data, status = self.make_request('GET', 'finance/accounts')
+        outlet_id = None
+        if success and data.get('accounts'):
+            for acc in data['accounts']:
+                if acc.get('outlet_id'):
+                    outlet_id = acc['outlet_id']
+                    break
+        
+        if not outlet_id:
+            # Try to get outlets from a different endpoint
+            success, data, status = self.make_request('GET', 'core/outlets')
+            if success and data.get('outlets'):
+                outlet_id = data['outlets'][0].get('_id') or data['outlets'][0].get('id')
+        
+        if not outlet_id:
+            self.log_result("Cashier Shift Tests", False, "No outlet ID found")
+            return
+        
+        # Test get current shift (should be none initially)
+        success, data, status = self.make_request('GET', 'cashier/shifts/current', params={'outlet_id': outlet_id})
+        self.log_result("Get Current Shift", success and 'shift' in data)
+        
+        # Test open shift
+        shift_data = {
+            "outlet_id": outlet_id,
+            "opening_cash": 100000,
+            "notes": "Test shift opening"
+        }
+        success, data, status = self.make_request('POST', 'cashier/shifts/open', shift_data)
+        if success and 'id' in data:
+            self.shift_id = data['id']
+            self.log_result("Open Cashier Shift", True)
+        else:
+            # Might already have an open shift, try to get current
+            success, data, status = self.make_request('GET', 'cashier/shifts/current', params={'outlet_id': outlet_id})
+            if success and data.get('shift'):
+                self.shift_id = data['shift']['id']
+                self.log_result("Open Cashier Shift", True, "Using existing open shift")
+            else:
+                self.log_result("Open Cashier Shift", False, f"Status: {status}")
+                self.shift_id = None
+        
+        # Test list shifts
+        success, data, status = self.make_request('GET', 'cashier/shifts', params={'outlet_id': outlet_id})
+        self.log_result("List Cashier Shifts", success and 'shifts' in data)
+
+    def test_cashier_orders(self):
+        """Test cashier order management"""
+        if not hasattr(self, 'shift_id') or not self.shift_id:
+            self.log_result("Cashier Order Tests", False, "No open shift available")
+            return
+        
+        # Get outlet ID from shift or accounts
+        success, data, status = self.make_request('GET', 'finance/accounts')
+        outlet_id = None
+        if success and data.get('accounts'):
+            for acc in data['accounts']:
+                if acc.get('outlet_id'):
+                    outlet_id = acc['outlet_id']
+                    break
+        
+        if not outlet_id:
+            self.log_result("Cashier Order Tests", False, "No outlet ID found")
+            return
+        
+        # Test create order
+        if hasattr(self, 'menu_items') and self.menu_items:
+            menu_item = self.menu_items[0]
+            order_data = {
+                "outlet_id": outlet_id,
+                "order_type": "dine_in",
+                "customer_name": "Test Customer",
+                "table_number": "T1",
+                "lines": [{
+                    "menu_item_id": menu_item.get('_id') or menu_item.get('id'),
+                    "name": menu_item.get('name', 'Test Item'),
+                    "qty": 2,
+                    "price": menu_item.get('price', 25000),
+                    "notes": ""
+                }],
+                "notes": "Test order",
+                "discount": 0,
+                "tax_rate": 0
+            }
+            
+            success, data, status = self.make_request('POST', 'cashier/orders', order_data)
+            if success and data.get('order'):
+                self.order_id = data['order']['id']
+                self.log_result("Create POS Order", True)
+                
+                # Test pay order
+                pay_data = {
+                    "payment_method": "cash",
+                    "amount_tendered": data['order']['total'] + 10000,  # Extra for change
+                    "notes": "Test payment"
+                }
+                success, pay_response, status = self.make_request('POST', f'cashier/orders/{self.order_id}/pay', pay_data)
+                self.log_result("Pay POS Order", success and 'change' in pay_response)
+            else:
+                self.log_result("Create POS Order", False, f"Status: {status}")
+                self.order_id = None
+        else:
+            self.log_result("Create POS Order", False, "No menu items available")
+        
+        # Test list orders
+        success, data, status = self.make_request('GET', 'cashier/orders', params={'outlet_id': outlet_id})
+        self.log_result("List POS Orders", success and 'orders' in data)
+
+    def test_cashier_dashboard(self):
+        """Test cashier dashboard"""
+        # Get outlet ID
+        success, data, status = self.make_request('GET', 'finance/accounts')
+        outlet_id = None
+        if success and data.get('accounts'):
+            for acc in data['accounts']:
+                if acc.get('outlet_id'):
+                    outlet_id = acc['outlet_id']
+                    break
+        
+        if not outlet_id:
+            self.log_result("Cashier Dashboard", False, "No outlet ID found")
+            return
+        
+        success, data, status = self.make_request('GET', 'cashier/dashboard', params={'outlet_id': outlet_id})
+        expected_keys = ['today_orders', 'today_sales', 'open_orders', 'current_shift', 'top_items']
+        has_keys = all(key in data for key in expected_keys) if success else False
+        self.log_result("Cashier Dashboard", success and has_keys)
+
+    def test_cashier_void_order(self):
+        """Test voiding an order"""
+        if not hasattr(self, 'order_id') or not self.order_id:
+            # Create a test order first
+            self.test_cashier_orders()
+        
+        if hasattr(self, 'order_id') and self.order_id:
+            # Create another order to void
+            success, data, status = self.make_request('GET', 'finance/accounts')
+            outlet_id = None
+            if success and data.get('accounts'):
+                for acc in data['accounts']:
+                    if acc.get('outlet_id'):
+                        outlet_id = acc['outlet_id']
+                        break
+            
+            if outlet_id and hasattr(self, 'menu_items') and self.menu_items:
+                menu_item = self.menu_items[0]
+                order_data = {
+                    "outlet_id": outlet_id,
+                    "order_type": "takeaway",
+                    "customer_name": "Test Void Customer",
+                    "lines": [{
+                        "menu_item_id": menu_item.get('_id') or menu_item.get('id'),
+                        "name": menu_item.get('name', 'Test Item'),
+                        "qty": 1,
+                        "price": menu_item.get('price', 25000),
+                        "notes": ""
+                    }],
+                    "notes": "Order to be voided",
+                    "discount": 0,
+                    "tax_rate": 0
+                }
+                
+                success, data, status = self.make_request('POST', 'cashier/orders', order_data)
+                if success and data.get('order'):
+                    void_order_id = data['order']['id']
+                    
+                    # Now void it
+                    void_data = {"reason": "Customer changed mind"}
+                    success, void_response, status = self.make_request('POST', f'cashier/orders/{void_order_id}/void', void_data)
+                    self.log_result("Void POS Order", success)
+                else:
+                    self.log_result("Void POS Order", False, "Could not create order to void")
+            else:
+                self.log_result("Void POS Order", False, "Missing outlet or menu items")
+        else:
+            self.log_result("Void POS Order", False, "No order available to test void")
+
+    def test_cashier_close_shift(self):
+        """Test closing a shift"""
+        if not hasattr(self, 'shift_id') or not self.shift_id:
+            self.log_result("Close Cashier Shift", False, "No open shift to close")
+            return
+        
+        close_data = {
+            "actual_cash": 150000,  # Some amount
+            "notes": "Test shift closing"
+        }
+        
+        success, data, status = self.make_request('POST', f'cashier/shifts/{self.shift_id}/close', close_data)
+        expected_keys = ['totals', 'expected_cash', 'actual_cash', 'variance']
+        has_keys = all(key in data for key in expected_keys) if success else False
+        self.log_result("Close Cashier Shift", success and has_keys)
+
     def run_all_tests(self):
         """Run all test suites"""
         print("🚀 Starting F&B ERP Backend API Tests")
@@ -243,6 +469,8 @@ class FnBERPTester:
         # Test credentials from the review request
         test_credentials = [
             ("admin@fnb.com", "admin123"),
+            ("cashier.sudirman@fnb.com", "cashier123"),
+            ("cashier.kemang@fnb.com", "cashier123"),
             ("finance@fnb.com", "finance123"),
             ("manager.sudirman@fnb.com", "manager123"),
             ("inventory@fnb.com", "inventory123")
@@ -251,7 +479,7 @@ class FnBERPTester:
         # Test health first
         self.test_health_check()
 
-        # Test login with different users
+        # Test login with different users, prioritize cashier users for cashier tests
         login_success = False
         for email, password in test_credentials:
             if self.test_login(email, password):
@@ -283,6 +511,15 @@ class FnBERPTester:
         # Create operations tests
         self.test_create_cash_movement()
         self.test_create_inventory_item()
+        
+        # Cashier Portal tests (Phase 3A)
+        print("\n🏪 Testing Cashier Portal APIs...")
+        self.test_cashier_menu()
+        self.test_cashier_shifts()
+        self.test_cashier_orders()
+        self.test_cashier_dashboard()
+        self.test_cashier_void_order()
+        self.test_cashier_close_shift()
 
         # Print summary
         print("\n" + "=" * 50)
