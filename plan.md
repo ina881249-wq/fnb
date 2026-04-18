@@ -1,7 +1,7 @@
 # plan.md
 
 ## 1) Objectives
-- Menjaga baseline yang sudah stabil (Phase 1 & 2) sambil memperluas platform menjadi **workflow operasional end-to-end** dari frontliner (Cashier/Kitchen) sampai kontrol (Outlet/Management/Executive).
+- Menjaga baseline yang sudah stabil (Phase 1 & 2) sambil memperluas platform menjadi **workflow operasional end-to-end** dari frontliner (**Cashier/Kitchen**) sampai kontrol (Outlet/Management/Executive).
 - Tetap memakai arsitektur **modular monolith** (FastAPI + MongoDB) dengan batas domain jelas (finance, inventory, approvals, closing, POS) agar portal baru bisa ditambahkan tanpa redesign.
 - Menjadikan finance + inventory **audit-grade** dan **control-grade**:
   - Double-entry accounting via **COA + Journal Engine + posting service**
@@ -13,7 +13,12 @@
   - konsistensi navigasi + tindakan kontekstual
 - Membangun **Cashier Portal & Kitchen Portal** sebagai sistem pencatat transaksi/produksi yang mengalir ke outlet closing dan approval.
 
-> Current status: **Original Phase 1 & 2 baseline build is COMPLETE**. Enhancement **Phase 1A, 1B, 1C are COMPLETE**. Enhancement **Phase 1D is PARTIALLY COMPLETE**. Mulai phase portal baru berdasarkan final production PDF, dengan prioritas: **Phase 3A Cashier Portal MVP (UI-first)**.
+> **Current status (updated):**
+> - Baseline Phase 1 & 2: **COMPLETE**
+> - Enhancement Phase 1A/1B/1C: **COMPLETE**
+> - Enhancement Phase 1D: **PARTIALLY COMPLETE** (sisa dipindah ke hardening)
+> - **Phase 3A Cashier Portal MVP: COMPLETE** (backend + frontend + testing 100% pass)
+> - Next up: **Phase 3B Kitchen Portal MVP** (Queue / Prep / Waste)
 
 ---
 
@@ -178,10 +183,10 @@ Goal: make UI enterprise-grade for daily operations.
 
 ---
 
-## Phase 3 — Portal Expansion + End-to-End Ops (NEW; based on Final Production PDF)
+## Phase 3 — Portal Expansion + End-to-End Ops (based on Final Production PDF)
 
-### Phase 3A — Cashier Portal MVP (STARTING NOW; UI-first)
-**User decision:** mulai implementasi langsung. Hardware (printer struk, cash drawer) dibutuhkan nanti, namun **fokus UI-only dulu**.
+### Phase 3A — Cashier Portal MVP (COMPLETED; UI-first)
+**User decision:** hardware dibutuhkan nanti (printer struk, cash drawer), namun **fokus UI-only dulu**.
 
 #### PDF ringkas (poin kunci yang relevan)
 - Portal architecture: Executive / Management / Outlet / **Cashier** / **Kitchen**.
@@ -192,83 +197,94 @@ Goal: make UI enterprise-grade for daily operations.
   4) Submit for approval
   5) Finance finalizes closing
 - Menu Cashier Portal: **POS, Payment, Shift**.
-- System flow (simplified): Cashier → Sales → Outlet Portal → Closing → Approval Engine → Management → Executive.
 
-#### Scope (MVP features)
+#### Implemented Scope (Delivered)
 1) **POS (order entry UI)**
-- Pilih outlet (mengikuti currentOutlet dari AuthContext bila user punya akses)
-- Browse item/menu, search item
-- Keranjang order: qty, catatan/modifier sederhana (free-text untuk MVP)
-- Hitung subtotal/total (tax/discount optional untuk MVP, minimal total)
-- Simpan order sebagai draft / open order
+- Browse menu items + category filter + search
+- Cart: qty add/remove, per-line removal, order meta (type/table/customer)
+- Checkout flow (create order → pay → receipt)
 
-2) **Payment (UI)**
-- Pilih metode bayar: cash / card / online / other (selaras dengan sales summary fields)
-- Input jumlah diterima (cash) + kembalian (UI)
-- Mark order as paid (UI + backend record)
+2) **Payment**
+- Methods: cash, card, QRIS, online
+- Cash tendered + change calculation
+- Receipt modal
 
 3) **Shift (Open/Close)**
-- Open shift: opening float
-- Close shift: hitung ringkasan transaksi shift (by payment type), input actual cash, variance
-- Generate “shift close submission” record untuk dipakai di daily closing outlet (Phase 3C)
+- Open shift with opening float
+- Close shift with expected cash vs actual cash, variance
+- Shift history table
 
-#### Backend (minimal supporting APIs & collections)
-- Tambah router baru: `pos_router.py` (atau `cashier_router.py`) di `/app/backend/routers`
-- Tambah collection (Mongo):
-  - `pos_orders` (order header)
-  - `pos_order_lines` (order lines) atau embedded array untuk MVP
-  - `cashier_shifts` (open/close, opening cash, closing cash, computed totals)
-  - `pos_payments` (optional; bisa embedded di order untuk MVP)
-- Endpoint minimal:
-  - `GET /api/pos/items` (reuse items; outlet scoping optional)
-  - `POST /api/pos/orders` create
-  - `GET /api/pos/orders?status=open|paid&outlet_id=` list
-  - `POST /api/pos/orders/{id}/pay`
-  - `POST /api/pos/shifts/open`
-  - `POST /api/pos/shifts/{id}/close`
-  - `GET /api/pos/shifts/current?outlet_id=`
-- RBAC/Permissions (baru):
-  - `cashier.pos.use`, `cashier.shift.open`, `cashier.shift.close`, `cashier.payments.process`
+4) **Orders Management**
+- Orders list with filters, pagination
+- Actions: view, pay open order, void open order (reason required)
 
-#### Frontend
-- Tambah layout baru: `CashierLayout.js`
-- Tambah pages:
-  - `/cashier/pos`
-  - `/cashier/payment`
-  - `/cashier/shift`
-- Update routing di `App.js` + PortalSelector untuk mengaktifkan portal cashier (status active saat MVP siap)
+5) **Dashboard**
+- KPIs: today sales/orders, open orders, current shift, top items
 
-#### Acceptance criteria
-- User dengan akses portal cashier dapat login → pilih portal cashier → masuk ke Cashier UI.
-- Cashier bisa membuat order, menambahkan item, dan menyimpan.
-- Cashier bisa melakukan pembayaran dan order berubah status menjadi paid.
-- Cashier bisa open dan close shift; close menghasilkan ringkasan dan variance.
+#### Backend (Delivered)
+- Router: `/api/cashier/*`
+- Mongo Collections + indexes:
+  - `menu_items`, `cashier_shifts`, `pos_orders` (+ `waste_logs` placeholder)
+- Endpoints delivered:
+  - `GET /api/cashier/menu`
+  - `POST /api/cashier/shifts/open`, `GET /api/cashier/shifts/current`, `GET /api/cashier/shifts`, `POST /api/cashier/shifts/{id}/close`
+  - `POST /api/cashier/orders`, `GET /api/cashier/orders`, `POST /api/cashier/orders/{id}/pay`, `POST /api/cashier/orders/{id}/void`
+  - `GET /api/cashier/dashboard`
+- Seed additions:
+  - 17 menu items
+  - roles: **Cashier**, **Kitchen Staff**
+  - users: `cashier.sudirman@fnb.com`, `cashier.kemang@fnb.com`, `chef.sudirman@fnb.com`
+- Integration: shift close **auto-creates sales_summaries** entry (source `cashier_shift`)
+
+#### Frontend (Delivered)
+- Layout: `CashierLayout.js`
+- Pages:
+  - `/cashier/dashboard`, `/cashier/pos`, `/cashier/orders`, `/cashier/shift`
+- Portal Selector: Cashier portal status **active** + routing enabled
+
+#### Quality / Testing
+- Testing agent: **Backend 29/29 passed**, Frontend core flows verified end-to-end.
+
+#### Acceptance criteria — Met
+- Cashier bisa login → pilih portal cashier → transaksi end-to-end (shift → POS → pay → receipt).
+- RBAC outlet scoping berjalan.
 
 ---
 
-### Phase 3B — Kitchen Portal MVP
+### Phase 3B — Kitchen Portal MVP (NEXT)
 #### Scope (MVP features)
-- **Queue**: daftar order paid yang perlu diproses (real-time nanti via WS; MVP polling)
-- **Prep**: ubah status order line / order: queued → in_progress → ready → served
+- **Queue**: daftar order paid yang perlu diproses (MVP: polling; next: WebSocket real-time)
+- **Prep**: ubah status ticket/order: `queued → preparing → ready → served`
 - **Waste**: log waste item (item, qty, reason) dan link ke outlet/date
 
-#### Backend
-- Router: `kitchen_router.py`
+#### Backend (to implement)
+- Router: `kitchen_router.py` (atau extend `cashier_router` minimal untuk kitchen endpoints jika ingin cepat, namun direkomendasikan router terpisah)
 - Collections:
-  - `kitchen_tickets` (atau reuse `pos_orders` dengan fields kitchen_status)
-  - `waste_logs`
+  - Reuse `pos_orders` untuk ticket queue + status kitchen
+  - `waste_logs` untuk pencatatan waste
 - Endpoint minimal:
-  - `GET /api/kitchen/queue?outlet_id=`
-  - `POST /api/kitchen/tickets/{id}/status`
+  - `GET /api/kitchen/queue?outlet_id=` (paid orders + kitchen_status filter)
+  - `POST /api/kitchen/tickets/{id}/status` (update `kitchen_status`)
   - `POST /api/kitchen/waste`
+- RBAC/Permissions:
+  - `kitchen.queue.view`, `kitchen.ticket.update`, `kitchen.waste.log`
+
+#### Frontend (to implement)
+- Layout baru: `KitchenLayout.js`
+- Pages:
+  - `/kitchen/queue` (kanban/columns by status)
+  - `/kitchen/prep` (optional; bisa gabung dengan queue untuk MVP)
+  - `/kitchen/waste` (form + list)
+- Portal Selector: Kitchen tetap `coming_soon` sampai MVP siap, lalu switch ke `active`
 
 #### Acceptance criteria
-- Kitchen bisa melihat queue per outlet dan update status.
-- Waste tersimpan dan muncul di laporan/variance (integrasi detail di Phase 3C/3D).
+- Kitchen staff bisa login → pilih portal kitchen → lihat queue per outlet.
+- Bisa update status ticket dan perubahan terlihat di queue.
+- Bisa log waste dan data tersimpan.
 
 ---
 
-### Phase 3C — End-to-end Daily Closing integration (Cashier ↔ Outlet Closing ↔ Approval)
+### Phase 3C — End-to-end Daily Closing integration (Cashier ↔ Outlet Closing ↔ Approval) (UPCOMING)
 #### Scope
 - Integrasikan data **shift close** dari cashier ke Daily Closing Outlet:
   - sales by payment type
@@ -279,12 +295,12 @@ Goal: make UI enterprise-grade for daily operations.
 - Finance finalize: tetap mengikuti daily closing locking existing + journal posting (bila diperlukan)
 
 #### Acceptance criteria
-- Daily Closing stepper di Outlet portal bisa menarik data shift yang closed untuk tanggal/outlet tersebut.
+- Daily Closing stepper di Outlet portal bisa menarik data shift yang closed untuk tanggal/outlet.
 - Closing submission memblok jika shift data belum lengkap atau variance belum diresolusikan sesuai rule.
 
 ---
 
-### Phase 3D — Hardening (DataTable rollout + Auth hardening)
+### Phase 3D — Hardening (DataTable rollout + Auth hardening) (LATER)
 #### Scope
 1) **DataTable standardization (server-side pagination + search/filter)**
 - Rollout ke list panjang: sales summaries, cash movements, petty cash, stock movements, audit trail, approvals, items, recipes, production orders
@@ -302,19 +318,18 @@ Goal: make UI enterprise-grade for daily operations.
 ---
 
 ## 3) Next Actions (immediate)
-1) **Mulai Phase 3A (Cashier Portal MVP, UI-first)**
-   - Buat CashierLayout + routing
-   - Implement POS page (order entry)
-   - Implement Payment page (mark paid)
-   - Implement Shift page (open/close)
-2) Setelah Cashier MVP stabil, lanjut Phase 3B (Kitchen MVP).
-3) Integrasikan data shift ke Daily Closing (Phase 3C).
-4) Lakukan hardening UI/Auth (Phase 3D) dan menutup sisa Phase 1D.
+1) **Mulai Phase 3B (Kitchen Portal MVP)**
+   - Backend kitchen endpoints (queue/status/waste)
+   - Frontend KitchenLayout + Queue UI (kanban)
+   - Waste logging UI
+   - Aktivasi portal kitchen di PortalSelector setelah MVP siap
+2) Setelah Kitchen MVP stabil, lanjut **Phase 3C** (integrasi end-to-end daily closing).
+3) Lakukan hardening UI/Auth (**Phase 3D**) dan menutup sisa **Phase 1D**.
 
 ---
 
 ## 4) Success Criteria
-- Semua transaksi operasional (POS, cash, petty cash, stock movement) dapat mengalir ke:
+- Semua transaksi operasional (POS, cash, petty cash, stock movement, waste) mengalir ke:
   - approval (bila perlu)
   - daily closing (outlet)
   - reporting (management/executive)
@@ -336,8 +351,8 @@ Goal: make UI enterprise-grade for daily operations.
 ### Outlet Portal (6 tabs)
 Dashboard, Cash, Sales, Petty Cash, Inventory, Daily Closing
 
-### Cashier Portal (target; Phase 3A)
-POS, Payment, Shift
+### Cashier Portal (Phase 3A — Delivered)
+Dashboard, POS, Orders, Shift
 
-### Kitchen Portal (target; Phase 3B)
+### Kitchen Portal (Phase 3B — Target)
 Queue, Prep, Waste
