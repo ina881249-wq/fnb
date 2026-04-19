@@ -11,9 +11,11 @@ import random
 
 async def seed_data():
     """Seed demo data for the F&B ERP system"""
-    # Check if data already exists
+    # Check if data already exists — skip if ANY outlets or users exist.
+    # This prevents race conditions during hot-reload when a reseed script is running.
     existing_users = await users_col.count_documents({})
-    if existing_users > 0:
+    existing_outlets = await outlets_col.count_documents({})
+    if existing_users > 0 or existing_outlets > 0:
         print("Data already seeded, skipping...")
         return
     
