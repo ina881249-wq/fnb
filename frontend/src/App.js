@@ -61,6 +61,7 @@ import WarehouseTransfers from './pages/warehouse/WarehouseTransfers';
 import WarehouseAdjustments from './pages/warehouse/WarehouseAdjustments';
 import WarehouseCounts from './pages/warehouse/WarehouseCounts';
 import AcceptInvitePage from './pages/AcceptInvitePage';
+import TwoFactorSetupPage from './pages/TwoFactorSetupPage';
 import './App.css';
 
 const ProtectedRoute = ({ children }) => {
@@ -93,6 +94,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/portal-select" /> : <LoginPage />} />
       <Route path="/accept-invite" element={<AcceptInvitePage />} />
+      <Route path="/2fa-setup" element={<ProtectedRoute><TwoFactorSetupPage /></ProtectedRoute>} />
       <Route path="/portal-select" element={<ProtectedRoute><PortalSelector /></ProtectedRoute>} />
       
       {/* Management Portal */}

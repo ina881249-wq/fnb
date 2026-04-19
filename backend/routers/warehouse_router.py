@@ -236,13 +236,27 @@ class TransferCreate(BaseModel):
     date: Optional[str] = None
     lines: List[TransferLine]
     notes: Optional[str] = ""
+    requires_approval: bool = False  # if True, starts as 'requested' instead of 'in_transit'
+
+
+class TransferApproveRequest(BaseModel):
+    comment: Optional[str] = ""
+
+
+class ReceiveLine(BaseModel):
+    item_id: str
+    received_qty: float
+
+
+class TransferReceiveRequest(BaseModel):
+    lines: Optional[List[ReceiveLine]] = None  # per-line received qty. If None, receive all.
+    notes: Optional[str] = ""
 
 
 @router.post("/transfers")
 async def create_transfer(req: TransferCreate, current_user: dict = Depends(get_current_user)):
     if req.from_outlet_id == req.to_outlet_id:
         raise HTTPException(status_code=400, detail="Source and destination must differ")
-    # Must have access to at least source
     await check_outlet_access(current_user, req.from_outlet_id)
 
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
@@ -250,69 +264,170 @@ async def create_transfer(req: TransferCreate, current_user: dict = Depends(get_
     transfer_number = f"TRF-{today}-{count + 1:04d}"
     transfer_date = req.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
+    initial_status = "requested" if req.requires_approval else "in_transit"
+
     doc = {
         "transfer_number": transfer_number,
         "from_outlet_id": req.from_outlet_id,
         "to_outlet_id": req.to_outlet_id,
         "date": transfer_date,
-        "lines": [l.dict() for l in req.lines],
+        "lines": [{**l.dict(), "received_qty": 0} for l in req.lines],
         "total_items": len(req.lines),
         "notes": req.notes,
-        "status": "in_transit",  # in_transit | received | cancelled
+        "status": initial_status,
+        "requires_approval": req.requires_approval,
         "requested_by": current_user["id"],
         "requested_by_name": current_user.get("name", ""),
         "created_at": now_utc(), "updated_at": now_utc(),
     }
     result = await warehouse_transfers_col.insert_one(doc)
 
-    # Deduct from source outlet immediately
-    for ln in req.lines:
-        await _apply_stock_delta(
-            ln.item_id, req.from_outlet_id, -abs(float(ln.quantity)),
-            "transfer_out", transfer_number,
-            f"Transfer {transfer_number} to destination",
-            current_user["id"],
-        )
+    # Deduct from source only if auto-approved (legacy path)
+    if initial_status == "in_transit":
+        for ln in req.lines:
+            await _apply_stock_delta(
+                ln.item_id, req.from_outlet_id, -abs(float(ln.quantity)),
+                "transfer_out", transfer_number,
+                f"Transfer {transfer_number} to destination",
+                current_user["id"],
+            )
 
     await log_audit(current_user["id"], "create", "warehouse", "transfer", str(result.inserted_id),
-                    details=f"{transfer_number}: {len(req.lines)} items")
-    await ws_manager.broadcast_all({"type": "warehouse_transfer_created", "transfer_number": transfer_number})
-    return {"id": str(result.inserted_id), "transfer_number": transfer_number}
+                    details=f"{transfer_number}: {len(req.lines)} items, status={initial_status}")
+    await ws_manager.broadcast_all({"type": "warehouse_transfer_created", "transfer_number": transfer_number, "status": initial_status})
+    return {"id": str(result.inserted_id), "transfer_number": transfer_number, "status": initial_status}
 
 
-@router.post("/transfers/{transfer_id}/receive")
-async def receive_transfer(transfer_id: str, current_user: dict = Depends(get_current_user)):
+@router.post("/transfers/{transfer_id}/approve")
+async def approve_transfer(transfer_id: str, req: TransferApproveRequest, current_user: dict = Depends(get_current_user)):
+    """Approve a requested transfer. Deducts stock from source and moves to in_transit."""
     try: oid = ObjectId(transfer_id)
     except: raise HTTPException(status_code=400, detail="Invalid id")
     doc = await warehouse_transfers_col.find_one({"_id": oid})
     if not doc: raise HTTPException(status_code=404, detail="Not found")
-    if doc.get("status") != "in_transit":
-        raise HTTPException(status_code=400, detail=f"Cannot receive — status: {doc.get('status')}")
-    await check_outlet_access(current_user, doc["to_outlet_id"])
+    if doc.get("status") != "requested":
+        raise HTTPException(status_code=400, detail=f"Cannot approve — status: {doc.get('status')}")
+    await check_outlet_access(current_user, doc["from_outlet_id"])
 
-    # Add to destination outlet
+    # Deduct from source
     for ln in doc.get("lines", []):
         await _apply_stock_delta(
-            ln["item_id"], doc["to_outlet_id"], abs(float(ln["quantity"])),
-            "transfer_in", doc["transfer_number"],
-            f"Transfer {doc['transfer_number']} received",
+            ln["item_id"], doc["from_outlet_id"], -abs(float(ln["quantity"])),
+            "transfer_out", doc["transfer_number"],
+            f"Transfer {doc['transfer_number']} approved & shipped",
             current_user["id"],
         )
+    await warehouse_transfers_col.update_one(
+        {"_id": oid},
+        {"$set": {
+            "status": "in_transit",
+            "approved_at": now_utc(),
+            "approved_by": current_user["id"],
+            "approved_by_name": current_user.get("name", ""),
+            "approval_comment": req.comment or "",
+            "updated_at": now_utc(),
+        }}
+    )
+    await log_audit(current_user["id"], "approve_transfer", "warehouse", "transfer", transfer_id,
+                    details=f"{doc['transfer_number']} approved")
+    await ws_manager.broadcast_all({"type": "warehouse_transfer_approved", "transfer_number": doc["transfer_number"]})
+    return {"message": "Transfer approved and shipped", "status": "in_transit"}
+
+
+@router.post("/transfers/{transfer_id}/reject")
+async def reject_transfer(transfer_id: str, req: TransferApproveRequest, current_user: dict = Depends(get_current_user)):
+    """Reject a requested transfer. No stock impact."""
+    try: oid = ObjectId(transfer_id)
+    except: raise HTTPException(status_code=400, detail="Invalid id")
+    doc = await warehouse_transfers_col.find_one({"_id": oid})
+    if not doc: raise HTTPException(status_code=404, detail="Not found")
+    if doc.get("status") != "requested":
+        raise HTTPException(status_code=400, detail=f"Cannot reject — status: {doc.get('status')}")
+    await check_outlet_access(current_user, doc["from_outlet_id"])
 
     await warehouse_transfers_col.update_one(
         {"_id": oid},
         {"$set": {
-            "status": "received",
-            "received_at": now_utc(),
-            "received_by": current_user["id"],
-            "received_by_name": current_user.get("name", ""),
+            "status": "rejected",
+            "rejected_at": now_utc(),
+            "rejected_by": current_user["id"],
+            "rejected_by_name": current_user.get("name", ""),
+            "rejection_reason": req.comment or "",
             "updated_at": now_utc(),
         }}
     )
+    await log_audit(current_user["id"], "reject_transfer", "warehouse", "transfer", transfer_id,
+                    details=f"{doc['transfer_number']} rejected: {req.comment}")
+    return {"message": "Transfer rejected", "status": "rejected"}
+
+
+@router.post("/transfers/{transfer_id}/receive")
+async def receive_transfer(transfer_id: str, req: Optional[TransferReceiveRequest] = None, current_user: dict = Depends(get_current_user)):
+    """Receive transfer at destination. Supports partial receive via req.lines per-line received_qty."""
+    try: oid = ObjectId(transfer_id)
+    except: raise HTTPException(status_code=400, detail="Invalid id")
+    doc = await warehouse_transfers_col.find_one({"_id": oid})
+    if not doc: raise HTTPException(status_code=404, detail="Not found")
+    if doc.get("status") not in ("in_transit", "partially_received"):
+        raise HTTPException(status_code=400, detail=f"Cannot receive — status: {doc.get('status')}")
+    await check_outlet_access(current_user, doc["to_outlet_id"])
+
+    # Build map of received qty from request, default = full qty
+    rcv_map = {}
+    if req and req.lines:
+        for rl in req.lines:
+            rcv_map[rl.item_id] = float(rl.received_qty)
+
+    updated_lines = []
+    all_full = True
+    any_received_now = False
+    variance_notes = []
+    for ln in doc.get("lines", []):
+        expected_total = float(ln.get("quantity", 0))
+        prev_recv = float(ln.get("received_qty", 0))
+        # Incremental qty received now
+        if ln["item_id"] in rcv_map:
+            new_recv_total = rcv_map[ln["item_id"]]
+        else:
+            new_recv_total = expected_total  # default full
+        new_recv_total = max(0, min(new_recv_total, expected_total))  # clamp
+        incremental = new_recv_total - prev_recv
+        if incremental > 0:
+            any_received_now = True
+            await _apply_stock_delta(
+                ln["item_id"], doc["to_outlet_id"], incremental,
+                "transfer_in", doc["transfer_number"],
+                f"Transfer {doc['transfer_number']} received ({new_recv_total}/{expected_total} {ln.get('uom','')})",
+                current_user["id"],
+            )
+        ln["received_qty"] = new_recv_total
+        if new_recv_total < expected_total:
+            all_full = False
+            diff = expected_total - new_recv_total
+            variance_notes.append(f"{ln.get('item_name','?')}: -{diff:.2f} {ln.get('uom','')}")
+        updated_lines.append(ln)
+
+    if not any_received_now:
+        raise HTTPException(status_code=400, detail="No additional quantity received")
+
+    new_status = "received" if all_full else "partially_received"
+    update_doc = {
+        "status": new_status,
+        "lines": updated_lines,
+        "last_received_at": now_utc(),
+        "updated_at": now_utc(),
+    }
+    if new_status == "received":
+        update_doc["received_at"] = now_utc()
+        update_doc["received_by"] = current_user["id"]
+        update_doc["received_by_name"] = current_user.get("name", "")
+        if variance_notes:
+            update_doc["variance_notes"] = variance_notes
+    await warehouse_transfers_col.update_one({"_id": oid}, {"$set": update_doc})
     await log_audit(current_user["id"], "receive_transfer", "warehouse", "transfer", transfer_id,
-                    details=f"{doc['transfer_number']} received")
-    await ws_manager.broadcast_all({"type": "warehouse_transfer_received", "transfer_number": doc["transfer_number"]})
-    return {"message": "Transfer received"}
+                    details=f"{doc['transfer_number']} → {new_status}")
+    await ws_manager.broadcast_all({"type": "warehouse_transfer_received", "transfer_number": doc["transfer_number"], "status": new_status})
+    return {"message": f"Transfer {new_status}", "status": new_status, "variance_notes": variance_notes}
 
 
 @router.post("/transfers/{transfer_id}/cancel")
@@ -321,16 +436,20 @@ async def cancel_transfer(transfer_id: str, current_user: dict = Depends(get_cur
     except: raise HTTPException(status_code=400, detail="Invalid id")
     doc = await warehouse_transfers_col.find_one({"_id": oid})
     if not doc: raise HTTPException(status_code=404, detail="Not found")
-    if doc.get("status") != "in_transit":
-        raise HTTPException(status_code=400, detail="Only in_transit can be cancelled")
-    # Restore source
-    for ln in doc.get("lines", []):
-        await _apply_stock_delta(
-            ln["item_id"], doc["from_outlet_id"], abs(float(ln["quantity"])),
-            "transfer_cancel", doc["transfer_number"],
-            f"Transfer {doc['transfer_number']} cancelled - reverted",
-            current_user["id"],
-        )
+    if doc.get("status") not in ("in_transit", "requested"):
+        raise HTTPException(status_code=400, detail="Only requested or in_transit can be cancelled")
+    # Restore source only if stock was already deducted (in_transit)
+    if doc.get("status") == "in_transit":
+        for ln in doc.get("lines", []):
+            already_received = float(ln.get("received_qty", 0))
+            remaining = float(ln.get("quantity", 0)) - already_received
+            if remaining > 0:
+                await _apply_stock_delta(
+                    ln["item_id"], doc["from_outlet_id"], remaining,
+                    "transfer_cancel", doc["transfer_number"],
+                    f"Transfer {doc['transfer_number']} cancelled - reverted",
+                    current_user["id"],
+                )
     await warehouse_transfers_col.update_one(
         {"_id": oid},
         {"$set": {"status": "cancelled", "cancelled_at": now_utc(), "cancelled_by": current_user["id"], "updated_at": now_utc()}}

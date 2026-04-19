@@ -11,7 +11,7 @@ import { Badge } from '../../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, ArrowLeftRight, Trash2, Check, X } from 'lucide-react';
+import { Plus, ArrowLeftRight, Trash2, Check, X, ThumbsUp, ThumbsDown, PackageCheck } from 'lucide-react';
 
 export default function WarehouseTransfers() {
   const { currentOutlet, outlets, getOutletName } = useAuth();
@@ -21,8 +21,12 @@ export default function WarehouseTransfers() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [items, setItems] = useState([]);
   const [addOpen, setAddOpen] = useState(false);
-  const [form, setForm] = useState({ to_outlet_id: '', notes: '', lines: [] });
+  const [form, setForm] = useState({ to_outlet_id: '', notes: '', requires_approval: true, lines: [] });
   const [newLine, setNewLine] = useState({ item_id: '', item_name: '', quantity: '' });
+  const [receiveTarget, setReceiveTarget] = useState(null);
+  const [receiveLines, setReceiveLines] = useState([]);
+  const [actionDialog, setActionDialog] = useState(null); // {t, action}
+  const [actionComment, setActionComment] = useState('');
 
   const load = useCallback(async () => {
     if (!currentOutlet) return;
@@ -52,27 +56,66 @@ export default function WarehouseTransfers() {
     if (form.to_outlet_id === currentOutlet) { toast.error(lang === 'id' ? 'Tujuan harus berbeda' : 'Destination must differ'); return; }
     if (form.lines.length === 0) { toast.error(lang === 'id' ? 'Tambahkan item' : 'Add items'); return; }
     try {
-      await api.post('/api/warehouse/transfers', {
+      const res = await api.post('/api/warehouse/transfers', {
         from_outlet_id: currentOutlet,
         to_outlet_id: form.to_outlet_id,
         lines: form.lines,
         notes: form.notes,
+        requires_approval: form.requires_approval,
       });
-      toast.success(lang === 'id' ? 'Transfer dibuat (in-transit)' : 'Transfer created (in-transit)');
+      const st = res.data.status;
+      toast.success(lang === 'id' ? `Transfer dibuat (${st})` : `Transfer created (${st})`);
       setAddOpen(false);
-      setForm({ to_outlet_id: '', notes: '', lines: [] });
+      setForm({ to_outlet_id: '', notes: '', requires_approval: true, lines: [] });
       load();
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
   };
 
-  const receive = async (t) => {
-    if (!window.confirm(lang === 'id' ? `Terima ${t.transfer_number}?` : `Receive ${t.transfer_number}?`)) return;
+  const approve = async () => {
+    if (!actionDialog) return;
     try {
-      await api.post(`/api/warehouse/transfers/${t.id}/receive`);
-      toast.success(lang === 'id' ? 'Transfer diterima' : 'Received');
+      await api.post(`/api/warehouse/transfers/${actionDialog.t.id}/approve`, { comment: actionComment });
+      toast.success(lang === 'id' ? 'Transfer disetujui' : 'Approved');
+      setActionDialog(null); setActionComment('');
       load();
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
   };
+
+  const reject = async () => {
+    if (!actionDialog) return;
+    if (!actionComment) { toast.error(lang === 'id' ? 'Alasan wajib' : 'Reason required'); return; }
+    try {
+      await api.post(`/api/warehouse/transfers/${actionDialog.t.id}/reject`, { comment: actionComment });
+      toast.success(lang === 'id' ? 'Transfer ditolak' : 'Rejected');
+      setActionDialog(null); setActionComment('');
+      load();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+  };
+
+  const openReceive = (t) => {
+    setReceiveTarget(t);
+    // Pre-fill with full expected qty (less already received)
+    setReceiveLines(t.lines.map(l => ({
+      item_id: l.item_id,
+      item_name: l.item_name,
+      uom: l.uom,
+      expected: l.quantity,
+      prev_received: l.received_qty || 0,
+      received_qty: l.quantity, // default full
+    })));
+  };
+
+  const submitReceive = async () => {
+    try {
+      const payload = { lines: receiveLines.map(l => ({ item_id: l.item_id, received_qty: parseFloat(l.received_qty || 0) })) };
+      const res = await api.post(`/api/warehouse/transfers/${receiveTarget.id}/receive`, payload);
+      toast.success(lang === 'id' ? `Transfer ${res.data.status}` : `Transfer ${res.data.status}`);
+      setReceiveTarget(null);
+      load();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+  };
+
+  const receive = (t) => openReceive(t); // replace old confirm
 
   const cancel = async (t) => {
     if (!window.confirm(lang === 'id' ? `Batalkan ${t.transfer_number}?` : `Cancel ${t.transfer_number}?`)) return;
@@ -84,9 +127,11 @@ export default function WarehouseTransfers() {
   };
 
   const statusStyle = (s) => {
+    if (s === 'requested') return 'border-cyan-500/40 text-cyan-400 bg-cyan-500/10';
     if (s === 'in_transit') return 'border-amber-500/40 text-amber-400 bg-amber-500/10';
+    if (s === 'partially_received') return 'border-blue-500/40 text-blue-400 bg-blue-500/10';
     if (s === 'received') return 'border-emerald-500/40 text-emerald-400 bg-emerald-500/10';
-    if (s === 'cancelled') return 'border-[hsl(var(--destructive))]/40 text-[hsl(var(--destructive))] bg-[hsl(var(--destructive))]/10';
+    if (s === 'rejected' || s === 'cancelled') return 'border-[hsl(var(--destructive))]/40 text-[hsl(var(--destructive))] bg-[hsl(var(--destructive))]/10';
     return 'border-[var(--glass-border)]';
   };
 
@@ -104,8 +149,11 @@ export default function WarehouseTransfers() {
             <SelectTrigger className="h-9 w-[150px] bg-[var(--glass-bg)]" data-testid="wh-transfer-status-filter"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{lang === 'id' ? 'Semua' : 'All'}</SelectItem>
+              <SelectItem value="requested">{lang === 'id' ? 'Diminta' : 'Requested'}</SelectItem>
               <SelectItem value="in_transit">{lang === 'id' ? 'In-transit' : 'In-transit'}</SelectItem>
+              <SelectItem value="partially_received">{lang === 'id' ? 'Diterima Sebagian' : 'Partially Received'}</SelectItem>
               <SelectItem value="received">{lang === 'id' ? 'Diterima' : 'Received'}</SelectItem>
+              <SelectItem value="rejected">{lang === 'id' ? 'Ditolak' : 'Rejected'}</SelectItem>
               <SelectItem value="cancelled">{lang === 'id' ? 'Dibatalkan' : 'Cancelled'}</SelectItem>
             </SelectContent>
           </Select>
@@ -144,20 +192,28 @@ export default function WarehouseTransfers() {
                   <td className="py-2 px-4 text-right">{t.total_items}</td>
                   <td className="py-2 px-4"><Badge variant="outline" className={statusStyle(t.status)}>{t.status}</Badge></td>
                   <td className="py-2 px-4 text-right">
-                    {t.status === 'in_transit' && (
-                      <div className="flex items-center justify-end gap-1">
-                        {t.to_outlet_id === currentOutlet && (
-                          <Button size="sm" variant="ghost" className="h-7 gap-1 text-emerald-400" onClick={() => receive(t)} data-testid={`wh-transfer-receive-${t.id}`}>
-                            <Check className="w-3 h-3" />{lang === 'id' ? 'Terima' : 'Receive'}
+                    <div className="flex items-center justify-end gap-1">
+                      {t.status === 'requested' && t.from_outlet_id === currentOutlet && (
+                        <>
+                          <Button size="sm" variant="ghost" className="h-7 gap-1 text-emerald-400" onClick={() => { setActionDialog({ t, action: 'approve' }); setActionComment(''); }} data-testid={`wh-transfer-approve-${t.id}`}>
+                            <ThumbsUp className="w-3 h-3" />{lang === 'id' ? 'Setujui' : 'Approve'}
                           </Button>
-                        )}
-                        {t.from_outlet_id === currentOutlet && (
-                          <Button size="sm" variant="ghost" className="h-7 gap-1 text-[hsl(var(--destructive))]" onClick={() => cancel(t)} data-testid={`wh-transfer-cancel-${t.id}`}>
-                            <X className="w-3 h-3" />Cancel
+                          <Button size="sm" variant="ghost" className="h-7 gap-1 text-[hsl(var(--destructive))]" onClick={() => { setActionDialog({ t, action: 'reject' }); setActionComment(''); }} data-testid={`wh-transfer-reject-${t.id}`}>
+                            <ThumbsDown className="w-3 h-3" />{lang === 'id' ? 'Tolak' : 'Reject'}
                           </Button>
-                        )}
-                      </div>
-                    )}
+                        </>
+                      )}
+                      {(t.status === 'in_transit' || t.status === 'partially_received') && t.to_outlet_id === currentOutlet && (
+                        <Button size="sm" variant="ghost" className="h-7 gap-1 text-emerald-400" onClick={() => receive(t)} data-testid={`wh-transfer-receive-${t.id}`}>
+                          <PackageCheck className="w-3 h-3" />{lang === 'id' ? 'Terima' : 'Receive'}
+                        </Button>
+                      )}
+                      {(t.status === 'in_transit' || t.status === 'requested') && t.from_outlet_id === currentOutlet && (
+                        <Button size="sm" variant="ghost" className="h-7 gap-1 text-[hsl(var(--destructive))]" onClick={() => cancel(t)} data-testid={`wh-transfer-cancel-${t.id}`}>
+                          <X className="w-3 h-3" />Cancel
+                        </Button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -206,10 +262,68 @@ export default function WarehouseTransfers() {
               </div>
             </div>
             <Textarea placeholder={lang === 'id' ? 'Catatan' : 'Notes'} value={form.notes} onChange={(e) => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} />
+            <label className="flex items-center gap-2 text-xs cursor-pointer p-2 rounded-lg bg-[var(--glass-bg-strong)] border border-[var(--glass-border)]">
+              <input type="checkbox" checked={form.requires_approval} onChange={(e) => setForm(f => ({ ...f, requires_approval: e.target.checked }))} data-testid="wh-transfer-requires-approval" />
+              <span>{lang === 'id' ? 'Perlu approval source outlet sebelum stok dipotong' : 'Require approval from source outlet before stock is deducted'}</span>
+            </label>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddOpen(false)}>{lang === 'id' ? 'Batal' : 'Cancel'}</Button>
-            <Button onClick={submit} data-testid="wh-transfer-submit">{lang === 'id' ? 'Kirim Transfer' : 'Send Transfer'}</Button>
+            <Button onClick={submit} data-testid="wh-transfer-submit">{lang === 'id' ? (form.requires_approval ? 'Ajukan Transfer' : 'Kirim Transfer') : (form.requires_approval ? 'Request Transfer' : 'Send Transfer')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Approve / Reject dialog */}
+      <Dialog open={!!actionDialog} onOpenChange={() => { setActionDialog(null); setActionComment(''); }}>
+        <DialogContent className="max-w-md bg-[hsl(var(--card))]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {actionDialog?.action === 'approve' ? <ThumbsUp className="w-5 h-5 text-emerald-400" /> : <ThumbsDown className="w-5 h-5 text-[hsl(var(--destructive))]" />}
+              {actionDialog?.action === 'approve' ? (lang === 'id' ? 'Setujui Transfer' : 'Approve Transfer') : (lang === 'id' ? 'Tolak Transfer' : 'Reject Transfer')}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <p className="text-sm">{actionDialog?.t?.transfer_number} — {actionDialog?.t?.total_items} items</p>
+            <Label className="text-xs">{actionDialog?.action === 'reject' ? (lang === 'id' ? 'Alasan *' : 'Reason *') : (lang === 'id' ? 'Catatan' : 'Comment')}</Label>
+            <Textarea value={actionComment} onChange={(e) => setActionComment(e.target.value)} rows={2} data-testid="wh-transfer-action-comment" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setActionDialog(null)}>{lang === 'id' ? 'Batal' : 'Cancel'}</Button>
+            <Button onClick={actionDialog?.action === 'approve' ? approve : reject} className={actionDialog?.action === 'approve' ? '' : 'bg-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive))]/90'} data-testid="wh-transfer-action-submit">
+              {actionDialog?.action === 'approve' ? (lang === 'id' ? 'Setujui' : 'Approve') : (lang === 'id' ? 'Tolak' : 'Reject')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Receive (partial) dialog */}
+      <Dialog open={!!receiveTarget} onOpenChange={() => setReceiveTarget(null)}>
+        <DialogContent className="max-w-xl bg-[hsl(var(--card))]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><PackageCheck className="w-5 h-5 text-emerald-400" />
+              {lang === 'id' ? 'Terima Transfer' : 'Receive Transfer'} — {receiveTarget?.transfer_number}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">{lang === 'id' ? 'Sesuaikan qty diterima per item (default: full). Jika kurang dari expected, transfer akan tercatat sebagai "partially received".' : 'Adjust received qty per item (default: full).'}</p>
+            {receiveLines.map((rl, i) => (
+              <div key={rl.item_id} className="grid grid-cols-12 gap-2 items-center p-2 rounded-lg bg-[var(--glass-bg-strong)] border border-[var(--glass-border)]">
+                <span className="col-span-5 text-sm">{rl.item_name}</span>
+                <span className="col-span-3 text-xs text-[hsl(var(--muted-foreground))]">
+                  Expected: {rl.expected} {rl.uom}
+                  {rl.prev_received > 0 && <span className="block text-cyan-400">Sudah: {rl.prev_received}</span>}
+                </span>
+                <Input type="number" min="0" max={rl.expected} step="0.01" value={rl.received_qty}
+                  onChange={(e) => setReceiveLines(prev => { const next = [...prev]; next[i] = { ...next[i], received_qty: e.target.value }; return next; })}
+                  className="col-span-3 h-9 text-sm" data-testid={`wh-receive-qty-${rl.item_id}`} />
+                <span className="col-span-1 text-xs">{rl.uom}</span>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReceiveTarget(null)}>{lang === 'id' ? 'Batal' : 'Cancel'}</Button>
+            <Button onClick={submitReceive} data-testid="wh-receive-submit"><Check className="w-4 h-4 mr-1" />{lang === 'id' ? 'Simpan Penerimaan' : 'Submit Receipt'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

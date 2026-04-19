@@ -8,7 +8,7 @@ import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { Label } from '../components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
-import { Lock, Mail, ChefHat, Sun, Moon, Languages, ShieldAlert } from 'lucide-react';
+import { Lock, Mail, ChefHat, Sun, Moon, Languages, ShieldAlert, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../api/client';
 
@@ -21,6 +21,8 @@ export default function LoginPage() {
   const [newPw, setNewPw] = useState('');
   const [confirmPw, setConfirmPw] = useState('');
   const [changing, setChanging] = useState(false);
+  const [needsTotp, setNeedsTotp] = useState(false);
+  const [totpCode, setTotpCode] = useState('');
   const { login } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const { lang, changeLang, t } = useLang();
@@ -31,7 +33,7 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      const res = await login(email, password);
+      const res = await login(email, password, needsTotp ? totpCode : null);
       if (res.must_change_password) {
         setMustChange(true);
         setLoading(false);
@@ -39,7 +41,14 @@ export default function LoginPage() {
       }
       navigate('/portal-select');
     } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed');
+      const detail = err.response?.data?.detail || 'Login failed';
+      if (detail === 'TOTP_REQUIRED') {
+        setNeedsTotp(true);
+        setError('');
+      } else {
+        setError(detail);
+        if (detail === 'Invalid 2FA code') setTotpCode('');
+      }
     }
     setLoading(false);
   };
@@ -136,6 +145,31 @@ export default function LoginPage() {
                     />
                   </div>
                 </div>
+
+                {needsTotp && (
+                  <div className="space-y-2 p-3 rounded-lg bg-[hsl(var(--primary))]/5 border border-[hsl(var(--primary))]/30">
+                    <Label className="flex items-center gap-1.5 text-sm">
+                      <KeyRound className="w-4 h-4 text-[hsl(var(--primary))]" />
+                      {lang === 'id' ? 'Kode 2FA (6 digit)' : '2FA Code (6 digits)'}
+                    </Label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]{6}"
+                      maxLength={6}
+                      placeholder="123456"
+                      value={totpCode}
+                      onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
+                      className="text-center text-xl font-mono tracking-[0.3em] bg-[hsl(var(--secondary))] border-[var(--glass-border)]"
+                      data-testid="login-totp-input"
+                      autoFocus
+                      required
+                    />
+                    <p className="text-[11px] text-[hsl(var(--muted-foreground))]">
+                      {lang === 'id' ? 'Buka aplikasi Authenticator (Google Authenticator, Authy, 1Password) dan masukkan kode saat ini.' : 'Open your Authenticator app and enter the current code.'}
+                    </p>
+                  </div>
+                )}
 
                 {error && (
                   <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm" data-testid="login-error">

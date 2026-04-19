@@ -10,8 +10,17 @@ from datetime import datetime, timezone, timedelta
 import re
 import secrets
 import string
+import io
+import base64
+import pyotp
+import qrcode
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+# ============ 2FA roles policy ============
+TFA_REQUIRED_PORTALS = {"management", "executive"}  # Users with these portals must enroll 2FA eventually
+TFA_ISSUER = "Lusi & Pakan ERP"
 
 
 # ============ Password Policy ============
@@ -29,6 +38,41 @@ def validate_password_policy(pw: str):
 class LoginRequest(BaseModel):
     email: str
     password: str
+    totp_code: Optional[str] = None
+
+
+@router.post("/login")
+async def login(req: LoginRequest):
+    user = await users_col.find_one({"email": req.email.lower().strip()})
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    if not verify_password(req.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    if not user.get("is_active", True):
+        raise HTTPException(status_code=403, detail="Account is deactivated")
+
+    # 2FA enforcement
+    if user.get("totp_enabled"):
+        if not req.totp_code:
+            # Signal client to collect 2FA
+            raise HTTPException(status_code=401, detail="TOTP_REQUIRED")
+        totp_secret = user.get("totp_secret")
+        if not totp_secret or not pyotp.TOTP(totp_secret).verify(req.totp_code, valid_window=1):
+            raise HTTPException(status_code=401, detail="Invalid 2FA code")
+
+    token = create_access_token({"user_id": str(user["_id"]), "email": user["email"]})
+    user_data = serialize_user(user)
+    permissions = await get_user_permissions(user_data)
+    must_change_password = bool(user.get("must_change_password", False))
+
+    await log_audit(str(user["_id"]), "login", "auth", "user", str(user["_id"]))
+
+    return {
+        "token": token,
+        "user": user_data,
+        "permissions": permissions,
+        "must_change_password": must_change_password,
+    }
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -42,30 +86,6 @@ class RegisterRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     old_password: str
     new_password: str
-
-@router.post("/login")
-async def login(req: LoginRequest):
-    user = await users_col.find_one({"email": req.email.lower().strip()})
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    if not verify_password(req.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    if not user.get("is_active", True):
-        raise HTTPException(status_code=403, detail="Account is deactivated")
-    
-    token = create_access_token({"user_id": str(user["_id"]), "email": user["email"]})
-    user_data = serialize_user(user)
-    permissions = await get_user_permissions(user_data)
-    must_change_password = bool(user.get("must_change_password", False))
-    
-    await log_audit(str(user["_id"]), "login", "auth", "user", str(user["_id"]))
-    
-    return {
-        "token": token,
-        "user": user_data,
-        "permissions": permissions,
-        "must_change_password": must_change_password,
-    }
 
 @router.post("/register")
 async def register(req: RegisterRequest, current_user: dict = Depends(get_current_user)):
@@ -362,3 +382,93 @@ async def get_password_policy():
         "require_symbol": False,
         "message": "Password must be at least 8 characters, with at least 1 letter and 1 digit.",
     }
+
+
+# ============ 2FA (TOTP) ============
+
+class TOTPVerifyRequest(BaseModel):
+    code: str
+
+
+@router.get("/2fa/status")
+async def get_tfa_status(current_user: dict = Depends(get_current_user)):
+    user = await users_col.find_one({"_id": ObjectId(current_user["id"])})
+    portals = set(user.get("portal_access", []))
+    required = bool(portals & TFA_REQUIRED_PORTALS) or user.get("is_superadmin", False)
+    return {
+        "enabled": bool(user.get("totp_enabled", False)),
+        "required_by_role": required,
+        "enrolled_at": user.get("totp_enrolled_at").isoformat() if user.get("totp_enrolled_at") else None,
+    }
+
+
+@router.post("/2fa/setup")
+async def setup_tfa(current_user: dict = Depends(get_current_user)):
+    """Generate a new TOTP secret and provisioning URI + QR code (base64 PNG).
+    The secret is stored as 'pending' until verified via /2fa/enable."""
+    user = await users_col.find_one({"_id": ObjectId(current_user["id"])})
+    if user.get("totp_enabled"):
+        raise HTTPException(status_code=400, detail="2FA already enabled. Disable first to re-enroll.")
+
+    secret = pyotp.random_base32()
+    totp = pyotp.TOTP(secret)
+    uri = totp.provisioning_uri(name=user["email"], issuer_name=TFA_ISSUER)
+
+    # Generate QR PNG as base64
+    qr_img = qrcode.make(uri)
+    buf = io.BytesIO()
+    qr_img.save(buf, format="PNG")
+    qr_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+
+    # Save pending secret
+    await users_col.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"totp_secret_pending": secret, "updated_at": datetime.now(timezone.utc)}}
+    )
+    return {
+        "secret": secret,
+        "uri": uri,
+        "qr_code_base64": f"data:image/png;base64,{qr_b64}",
+        "issuer": TFA_ISSUER,
+        "message": "Scan the QR with your Authenticator app, then enter the 6-digit code to enable.",
+    }
+
+
+@router.post("/2fa/enable")
+async def enable_tfa(req: TOTPVerifyRequest, current_user: dict = Depends(get_current_user)):
+    """Verify a 6-digit TOTP code and finalize enrollment."""
+    user = await users_col.find_one({"_id": ObjectId(current_user["id"])})
+    pending = user.get("totp_secret_pending")
+    if not pending:
+        raise HTTPException(status_code=400, detail="No pending 2FA setup. Call /2fa/setup first.")
+    if not pyotp.TOTP(pending).verify(req.code, valid_window=1):
+        raise HTTPException(status_code=400, detail="Invalid code. Make sure your device clock is synced.")
+    await users_col.update_one(
+        {"_id": user["_id"]},
+        {"$set": {
+            "totp_secret": pending,
+            "totp_enabled": True,
+            "totp_enrolled_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        }, "$unset": {"totp_secret_pending": ""}}
+    )
+    await log_audit(current_user["id"], "enable_2fa", "auth", "user", current_user["id"], details="2FA enrolled")
+    return {"message": "2FA enabled successfully", "enabled": True}
+
+
+@router.post("/2fa/disable")
+async def disable_tfa(req: TOTPVerifyRequest, current_user: dict = Depends(get_current_user)):
+    """Disable 2FA. Requires a valid current TOTP code (or current password as fallback)."""
+    user = await users_col.find_one({"_id": ObjectId(current_user["id"])})
+    if not user.get("totp_enabled"):
+        return {"message": "2FA is not enabled", "enabled": False}
+    secret = user.get("totp_secret")
+    if not secret or not pyotp.TOTP(secret).verify(req.code, valid_window=1):
+        raise HTTPException(status_code=400, detail="Invalid 2FA code")
+    await users_col.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"totp_enabled": False, "updated_at": datetime.now(timezone.utc)},
+         "$unset": {"totp_secret": "", "totp_enrolled_at": ""}}
+    )
+    await log_audit(current_user["id"], "disable_2fa", "auth", "user", current_user["id"], details="2FA disabled")
+    return {"message": "2FA disabled", "enabled": False}

@@ -6,15 +6,20 @@
 - Menjadikan finance + inventory **audit-grade** dan **control-grade**:
   - Double-entry accounting via **COA + Journal Engine + Posting Service**
   - Kontrol operasional via **reconciliation, daily closing, approvals, alerts**
-  - Inventory operasional via **receiving, transfer, adjustment, stock count** + traceability `stock_movements`
+  - Inventory operasional via **receiving, transfer workflow, adjustment, stock count** + traceability `stock_movements`
 - Upgrade UI menjadi **enterprise operational cockpit**:
-  - DataTable standar (pagination/search/filter/sort) di semua modul utama
+  - DataTable standar (pagination/search/filter/sort) di semua modul list utama
   - workflow-first screens untuk outlet ops (closing-driven)
   - konsistensi navigasi + tindakan kontekstual
+  - **mobile/tablet-first** untuk frontliner (Cashier POS + Kitchen KDS)
 - Menjadikan **Cashier Portal, Kitchen Portal, Warehouse Portal** sebagai sumber data operasional yang mengalir ke kontrol outlet (closing) dan monitoring (management/executive).
 - Menambahkan **AI Control Tower untuk Executive**:
   - Auto-narrative briefing, chat Q&A berbasis data internal, forecast, dan anomaly detection
   - Fokus: actionable insight, investigasi cepat, dan early warning operasional
+- Menutup gap production readiness:
+  - **Onboarding aman** (invite flow) + **password policy** + **2FA TOTP** untuk role sensitif
+  - **Warehouse transfer governance** (request → approve → ship → receive, partial receive)
+  - **KDS mode** untuk dapur (fullscreen kiosk, touch-friendly)
 
 > **Current status (updated):**
 > - Baseline Phase 1 & 2: **COMPLETE**
@@ -32,6 +37,9 @@
 > - **P1a Auto-journal integration: COMPLETE**
 > - **P1b Auth hardening lanjutan (password policy + invite + sessions): COMPLETE**
 > - **P1c Mobile/tablet-first POS Cashier: COMPLETE**
+> - **P2a 2FA TOTP: COMPLETE**
+> - **P2c Advanced Transfer Workflow: COMPLETE**
+> - **P2e Mobile-first Kitchen KDS: COMPLETE**
 > - Latest testing: `iteration_4.json` (frontend regression DataTable) — **no critical bugs**
 
 ---
@@ -296,7 +304,7 @@ Goal: Semua transaksi operasional penting auto-post ke journal (double-entry) un
 Delivered:
 - File baru: `/app/backend/utils/posting_service.py`
   - `post_receipt_journal()` → Dr Inventory (1210/1220) / Cr AP (2100)
-  - `post_waste_journal()` → Dr Waste  Spoilage (6800) / Cr Inventory (1210/1220)
+  - `post_waste_journal()` → Dr Waste & Spoilage (6800) / Cr Inventory (1210/1220)
   - `post_adjustment_journal()` → gain/loss inventory vs Misc Expense (6900)
 - Integrasi:
   - `routers/warehouse_router.py`: create_receipt + create_adjustment mengembalikan `journal_number`
@@ -349,20 +357,84 @@ Acceptance criteria — Met.
 
 ---
 
+## P2 — Production Readiness Plus (COMPLETE)
+
+### P2c — Advanced Warehouse Transfer Workflow (COMPLETED)
+Goal: formal transfer governance dan traceability lintas outlet.
+
+Backend (`warehouse_router.py`):
+- Status baru: `requested → in_transit → partially_received → received` + branch `rejected`, `cancelled`
+- Endpoint tambahan:
+  - `POST /api/warehouse/transfers` support `requires_approval` (jika true → status `requested`)
+  - `POST /api/warehouse/transfers/{id}/approve` (ship: potong stok source)
+  - `POST /api/warehouse/transfers/{id}/reject` (tanpa dampak stok)
+  - `POST /api/warehouse/transfers/{id}/receive` support partial per-line (`lines:[{item_id, received_qty}]`)
+- Policy:
+  - Deduct stock hanya saat **approve** (bukan saat request)
+  - Partial receive menyimpan `received_qty` per line
+
+Frontend (`WarehouseTransfers.js`):
+- Create transfer dialog: checkbox **requires approval**
+- Approve/Reject action buttons untuk status `requested`
+- Receive dialog mendukung **partial receive** (input qty per item)
+- Badge status dengan 6 warna
+
+Acceptance criteria — Met.
+
+---
+
+### P2e — Mobile-first Kitchen KDS (COMPLETED)
+Goal: kitchen workstation siap tablet/kiosk, cepat, jelas, touch-friendly.
+
+Frontend (`KitchenQueue.js`) — rewritten:
+- Mobile: **horizontal scroll-snap carousel** per kolom status
+- Tablet/Desktop: grid kanban
+- Big touch targets: action button `h-14`, typography diperbesar
+- Urgency indicator:
+  - ≥15 menit: border amber
+  - ≥25 menit: pulsing border merah
+- Fullscreen toggle (native Fullscreen API) untuk kiosk mode
+- Show/Hide Served toggle
+- Notes display dalam callout amber
+- Stats strip compact di mobile
+
+Acceptance criteria — Met.
+
+---
+
+### P2a — 2FA TOTP (COMPLETED)
+Goal: hardening security untuk role sensitif (management/executive/superadmin).
+
+Backend (`auth_router.py` + libs `pyotp`, `qrcode`):
+- `POST /api/auth/2fa/setup` → secret + provisioning URI + QR base64 PNG
+- `POST /api/auth/2fa/enable` → verify code + finalize
+- `POST /api/auth/2fa/disable` → require current code
+- `GET /api/auth/2fa/status` → enabled/required_by_role/enrolled_at
+- Login behavior:
+  - jika `totp_enabled=true` dan `totp_code` kosong → `401 {detail: "TOTP_REQUIRED"}`
+
+Frontend:
+- LoginPage: menangani `TOTP_REQUIRED` → tampilkan input kode 6-digit (retry login)
+- New page: `/2fa-setup` via `TwoFactorSetupPage.js` (QR + verify + disable)
+
+Acceptance criteria — Met.
+
+---
+
 ## 3) Next Actions (immediate)
-Karena P1a/P1b/P1c sudah complete, opsi lanjutan untuk iterasi berikutnya:
-1) **P2 — 2FA (TOTP) untuk finance/superadmin**
-   - Setup TOTP secret per user
-   - Enforce on login untuk role tertentu
-2) **P2 — Email delivery untuk invite**
-   - Kirim invite link via SMTP provider (SendGrid/Mailgun) atau WhatsApp integration
-3) **P2 — Advanced warehouse transfer workflow**
-   - request → approval → ship → receive
-   - SLA + partial receive
-4) **P2 — Journal-driven reporting full refactor**
-   - PL, Cashflow, Balance Sheet 100% dari journal
-5) **P2 — Mobile-first Kitchen KDS**
-   - full-screen kitchen mode, swipe actions, real-time websockets
+Karena P1 + P2 sudah complete, opsi lanjutan untuk iterasi berikutnya:
+1) **Evaluation + Enhancement Recommendations (post-P2)**
+   - UAT checklist per role (Cashier/Kitchen/Warehouse/Manager/Finance/Executive)
+   - Gap analysis data integrity: journal vs reports, stock movements vs SOH
+   - Performance check (list pages, large datasets)
+2) **P3 — Hardware + Integrations**
+   - Printer struk (ESC/POS), cash drawer, QRIS provider integration
+3) **P3 — Journal-driven reporting full refactor**
+   - P&L/Cashflow/Balance Sheet 100% dari journal sebagai single source-of-truth
+4) **P3 — Real-time websockets UI**
+   - Kitchen UI subscribe ke `kitchen_ticket_new` + updates (hapus polling)
+5) **P3 — Advanced workflows**
+   - Receiving berbasis PO, approval threshold untuk adjustments, attachments (invoice/receipt images)
 
 ---
 
@@ -374,13 +446,15 @@ Karena P1a/P1b/P1c sudah complete, opsi lanjutan untuk iterasi berikutnya:
 - Daily closing end-to-end berjalan sesuai flow:
   - cashier close shift → outlet review → system validate → submit approval → finance finalize/lock.
 - Finance tetap **double-entry**, dan makin journal-driven.
-- UI operasional-grade: DataTable konsisten, filter/pagination stabil, saved views/bulk actions bertahap.
+- UI operasional-grade:
+  - DataTable konsisten, filter/pagination stabil
+  - mobile/tablet UX siap lapangan (Cashier POS + Kitchen KDS)
 - Executive control tower proaktif dengan AI:
   - briefing otomatis, anomaly detection, forecasting untuk tindakan cepat.
 - **Production readiness**:
   - Auto-journal untuk receiving/waste/adjustment aktif dan balanced
-  - Password policy + invite onboarding + session audit tersedia
-  - POS siap tablet/mobile (touch friendly + keypad)
+  - Password policy + invite onboarding + session audit + **2FA** tersedia
+  - Warehouse transfers punya governance (request/approve/partial receive)
 
 ---
 
@@ -400,10 +474,10 @@ Dashboard, Cash, Sales, Petty Cash, Inventory, Daily Closing
 Dashboard, POS, Orders, Shift
 
 ### Kitchen Portal
-Dashboard, Queue, Waste
+Dashboard, Queue (Mobile KDS), Waste
 
 ### Warehouse Portal
-Dashboard, Receiving, Transfers, Adjustments, Inventory Count
+Dashboard, Receiving, Transfers (Advanced), Adjustments, Inventory Count
 
 ### Executive Portal
 Overview, Revenue Analytics, Expense Analytics, Outlet Performance, Inventory Health, Control Tower,
