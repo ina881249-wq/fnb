@@ -454,6 +454,447 @@
       "WebSocket notifications should surface via Sonner toasts + a notifications panel (Sheet)."
     ]
   },
+  "executive_dashboard_premium_interactive_guidelines": {
+    "section_title": "# Executive Dashboard — Premium Interactive Guidelines",
+    "design_personality": {
+      "keywords": [
+        "dark-premium",
+        "electric accents",
+        "glass depth",
+        "data-dense but calm",
+        "drill-down everywhere"
+      ],
+      "north_star": "Match Dashbrd X: compact KPI tiles, crisp typography, subtle blue glow, floating tooltip markers, and interaction-first charts (hover + click + drill-down)."
+    },
+    "color_tokens_exec_only": {
+      "where": "/app/frontend/src/index.css (add tokens under :root/.dark and .light; do not hardcode hex in components)",
+      "tokens": {
+        "--exec-accent-blue": "214 95% 60%",
+        "--exec-accent-blue-soft": "214 95% 60% / 0.18",
+        "--exec-accent-glow": "214 95% 60% / 0.35",
+        "--exec-ring": "214 95% 60%",
+        "--exec-grid": "214 40% 60% / 0.10",
+        "--exec-marker": "214 95% 60%",
+        "--exec-positive": "142 72% 45%",
+        "--exec-negative": "0 72% 52%",
+        "--exec-warning": "43 92% 58%"
+      },
+      "mapping_rules": [
+        "Primary teal stays global: use --primary for primary CTAs and global navigation.",
+        "Executive Portal secondary accent: use --exec-accent-blue for chart strokes, active period pills, focus rings inside Exec pages, and selected states.",
+        "Never replace global --accent; scope exec accent via wrapper class on Exec pages (e.g., .exec-portal) and use CSS vars there if needed.",
+        "Light mode: keep the same HSL hue but reduce glow opacity; ensure text contrast on white cards."
+      ],
+      "tailwind_usage": {
+        "accent_text": "text-[hsl(var(--exec-accent-blue))]",
+        "accent_bg_soft": "bg-[hsl(var(--exec-accent-blue-soft))]",
+        "accent_ring": "focus-visible:ring-2 focus-visible:ring-[hsl(var(--exec-ring))]",
+        "accent_border": "border-[hsl(var(--exec-accent-blue)/0.28)]",
+        "accent_shadow_glow": "shadow-[0_0_0_1px_hsl(var(--exec-accent-blue)/0.18),0_18px_60px_hsl(var(--exec-accent-blue)/0.10)]"
+      }
+    },
+    "exec_spacing_elevation_radius_tokens": {
+      "tokens": {
+        "--exec-card-radius": "1.05rem",
+        "--exec-card-padding": "1rem",
+        "--exec-card-padding-lg": "1.25rem",
+        "--exec-card-gap": "0.875rem",
+        "--exec-hairline": "1px",
+        "--exec-shadow": "0 18px 60px rgba(0,0,0,0.55)",
+        "--exec-shadow-soft": "0 10px 30px rgba(0,0,0,0.35)",
+        "--exec-hover-lift": "translateY(-2px)",
+        "--exec-hover-bg": "rgba(255,255,255,0.085)",
+        "--exec-hover-border": "rgba(255,255,255,0.18)"
+      },
+      "card_recipe": "rounded-[var(--exec-card-radius)] bg-[var(--glass-bg)] border border-[var(--glass-border)] shadow-[var(--glass-shadow-soft)] backdrop-blur-xl",
+      "hover_recipe": "hover:bg-[var(--exec-hover-bg)] hover:border-[var(--exec-hover-border)]",
+      "interaction_note": "Do not use transition-all. Use transition-[background-color,border-color,box-shadow] duration-200 ease-out."
+    },
+    "typography_exec_scale": {
+      "fonts": {
+        "headings_metrics": "Space Grotesk",
+        "body": "Inter (already loaded in app context per requirement; if not, keep Manrope but do not change global fonts for other portals)",
+        "numbers": "tabular-nums utility"
+      },
+      "scale": {
+        "page_title": "text-xl sm:text-2xl font-semibold tracking-tight",
+        "hero_metric": "text-4xl sm:text-5xl font-semibold tracking-tight tabular-nums",
+        "kpi_value": "text-[28px] sm:text-[32px] font-semibold tracking-tight tabular-nums",
+        "kpi_label": "text-[10px] sm:text-[11px] uppercase tracking-[0.18em] text-[hsl(var(--muted-foreground))]",
+        "micro_label": "text-[11px] text-[hsl(var(--muted-foreground))]",
+        "table_body": "text-sm",
+        "badge": "text-[11px]"
+      },
+      "number_formatting": [
+        "Always use tabular numbers for KPIs and chart tooltip values.",
+        "Use compact notation for big numbers (e.g., 1.2B) but show full value in tooltip and drill-down modal."
+      ]
+    },
+    "component_path": {
+      "shadcn_required": {
+        "period_picker": [
+          "/app/frontend/src/components/ui/popover.jsx",
+          "/app/frontend/src/components/ui/calendar.jsx",
+          "/app/frontend/src/components/ui/tabs.jsx",
+          "/app/frontend/src/components/ui/toggle-group.jsx",
+          "/app/frontend/src/components/ui/switch.jsx",
+          "/app/frontend/src/components/ui/button.jsx",
+          "/app/frontend/src/components/ui/badge.jsx",
+          "/app/frontend/src/components/ui/separator.jsx"
+        ],
+        "kpi_drilldown": [
+          "/app/frontend/src/components/ui/card.jsx",
+          "/app/frontend/src/components/ui/sheet.jsx",
+          "/app/frontend/src/components/ui/dialog.jsx",
+          "/app/frontend/src/components/ui/table.jsx",
+          "/app/frontend/src/components/ui/scroll-area.jsx",
+          "/app/frontend/src/components/ui/skeleton.jsx",
+          "/app/frontend/src/components/ui/tooltip.jsx"
+        ]
+      }
+    },
+    "interactive_kpi_card_spec": {
+      "purpose": "Compact KPI tile with value + trend + inline sparkline; click opens Sheet with breakdown.",
+      "anatomy": {
+        "header_row": [
+          "Label (kpi_label)",
+          "Trend badge (Badge) with arrow icon",
+          "Optional realtime dot (pulse)"
+        ],
+        "value_row": [
+          "Primary value (kpi_value)",
+          "Compare-to-previous mini delta (caption) when enabled"
+        ],
+        "sparkline_row": [
+          "Inline sparkline (Recharts LineChart/AreaChart) height 44–56px",
+          "No axes; 1–2 reference dots (latest + peak)"
+        ],
+        "footer_row": [
+          "Secondary metric chips (e.g., Margin %, Avg Ticket) optional",
+          "Chevron affordance (lucide ChevronRight)"
+        ]
+      },
+      "layout_classes": {
+        "card": "group relative overflow-hidden rounded-[var(--exec-card-radius)] bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4 shadow-[var(--glass-shadow-soft)] backdrop-blur-xl",
+        "clickable": "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--exec-ring))]",
+        "hover": "transition-[background-color,border-color,box-shadow] duration-200 ease-out hover:bg-[var(--exec-hover-bg)] hover:border-[var(--exec-hover-border)] hover:shadow-[0_18px_60px_rgba(0,0,0,0.55),0_0_0_1px_hsl(var(--exec-accent-blue)/0.18)]",
+        "glow_blob": "pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-[hsl(var(--exec-accent-blue)/0.18)] blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+      },
+      "states": {
+        "default": [
+          "Sparkline uses exec accent stroke; fill uses very low opacity.",
+          "Trend badge uses semantic colors (positive/negative) but keep premium (no neon)."
+        ],
+        "hover": [
+          "Lift illusion via shadow + glow blob (no translate on container unless using Framer Motion).",
+          "Sparkline marker grows slightly (scale 1.0 -> 1.12)."
+        ],
+        "loading": [
+          "Use Skeleton for label/value and a shimmering sparkline placeholder.",
+          "Keep card height stable to avoid layout shift."
+        ],
+        "error": [
+          "Show compact Alert inside card: 'Failed to load' + Retry button (ghost).",
+          "Border becomes destructive/30; keep glass background."
+        ],
+        "clicked_active": [
+          "When Sheet open, keep card in 'selected' state: border exec accent/35 + subtle inner ring."
+        ]
+      },
+      "sparkline_spec": {
+        "chart": "Recharts LineChart or AreaChart",
+        "stroke": "hsl(var(--exec-accent-blue))",
+        "strokeWidth": 2,
+        "fill": "hsl(var(--exec-accent-blue) / 0.12)",
+        "dot": "Only show dot for active point and last point",
+        "activeDot": "r=4, stroke=white/70, strokeWidth=2, fill=exec accent",
+        "interaction": "Hover within card reveals tooltip-like mini label (optional) but primary drill-down is click."
+      },
+      "data_testids": {
+        "card": "exec-kpi-card-<metric-key>",
+        "value": "exec-kpi-card-<metric-key>-value",
+        "trend_badge": "exec-kpi-card-<metric-key>-trend-badge",
+        "open_sheet": "exec-kpi-card-<metric-key>-open-sheet"
+      }
+    },
+    "premium_period_picker_spec": {
+      "purpose": "Executive-grade period control with presets + custom range + compare toggle.",
+      "anatomy": {
+        "left": [
+          "Preset pills row: Today, 7D, 30D, MTD, QTD, YTD, Custom",
+          "Custom opens Popover with Calendar range"
+        ],
+        "right": [
+          "Compare-to-previous toggle (Switch) + label",
+          "Optional 'Last refreshed' timestamp"
+        ]
+      },
+      "preset_pills": {
+        "component": "ToggleGroup (type=single)",
+        "pill_style": "rounded-full px-3 py-1.5 text-xs border border-white/10 bg-white/5 hover:bg-white/8",
+        "active_style": "data-[state=on]:bg-[hsl(var(--exec-accent-blue)/0.18)] data-[state=on]:border-[hsl(var(--exec-accent-blue)/0.35)] data-[state=on]:text-[hsl(var(--foreground))]",
+        "focus": "focus-visible:ring-2 focus-visible:ring-[hsl(var(--exec-ring))]",
+        "data_testid": "exec-period-picker-preset-<preset>"
+      },
+      "custom_range": {
+        "component": "Popover + Calendar (range)",
+        "trigger": "Button variant=outline (glass) with calendar icon",
+        "popover_surface": "glass_panel_strong rounded-xl p-3 w-[320px]",
+        "calendar_rules": [
+          "Use shadcn Calendar only.",
+          "Highlight range with exec accent soft background.",
+          "Show quick actions inside popover footer: Apply / Cancel."
+        ],
+        "data_testids": {
+          "trigger": "exec-period-picker-custom-trigger",
+          "apply": "exec-period-picker-custom-apply-button",
+          "cancel": "exec-period-picker-custom-cancel-button"
+        }
+      },
+      "compare_toggle": {
+        "component": "Switch",
+        "label": "Compare to previous",
+        "helper": "Shows baseline values + delta",
+        "data_testid": "exec-period-picker-compare-toggle"
+      }
+    },
+    "chart_styling_specs_recharts": {
+      "global_rules": [
+        "Charts live inside glass cards; never on raw background.",
+        "Use subtle grid lines (exec grid token) and minimal axis ticks.",
+        "Hover shows floating glass tooltip + marker; click opens drill-down Dialog.",
+        "All chart wrappers must be keyboard focusable when clickable (tabIndex=0) and have aria-label."
+      ],
+      "axes": {
+        "tick": "fill: hsl(var(--muted-foreground) / 0.85); fontSize: 11",
+        "axisLine": "stroke: hsl(var(--border) / 0.55)",
+        "tickLine": "stroke: hsl(var(--border) / 0.35)",
+        "padding": "{ left: 8, right: 8 }"
+      },
+      "grid": {
+        "stroke": "hsl(var(--exec-grid))",
+        "strokeDasharray": "3 6",
+        "vertical": false
+      },
+      "area_line": {
+        "lineStroke": "hsl(var(--exec-accent-blue))",
+        "lineStrokeWidth": 2,
+        "areaFill": "linearGradient: exec-blue-fade (0% 0.22 -> 100% 0.00)",
+        "activeDot": "r=5, fill exec accent, stroke white/70, strokeWidth 2"
+      },
+      "bar": {
+        "radius": "[6,6,0,0]",
+        "fill": "linearGradient: exec-blue-bar (0% 0.55 -> 100% 0.18)",
+        "compare": "Previous period uses muted foreground / 0.22 fill + dashed outline"
+      },
+      "donut": {
+        "innerRadius": "68%",
+        "outerRadius": "86%",
+        "center_metric": "Big number (kpi_value) + label (micro_label)",
+        "ring": "Outer ring uses exec accent soft; segment separators are background/transparent"
+      },
+      "tooltip_spec": {
+        "container_classes": "rounded-xl bg-[var(--glass-bg-strong)] border border-[var(--glass-border-strong)] backdrop-blur-2xl shadow-[var(--glass-shadow)] px-3 py-2",
+        "title": "text-xs uppercase tracking-[0.16em] text-[hsl(var(--muted-foreground))]",
+        "value": "text-sm font-semibold tabular-nums",
+        "marker": "Small dot with exec accent + subtle glow",
+        "cursor": "Disable default cursor fill; instead render a thin vertical line (stroke exec accent/25)"
+      },
+      "data_testids": {
+        "chart": "exec-chart-<chart-key>",
+        "tooltip": "exec-chart-<chart-key>-tooltip",
+        "datapoint": "exec-chart-<chart-key>-datapoint-<index>"
+      }
+    },
+    "kpi_detail_sheet_spec": {
+      "component": "Sheet (right side)",
+      "width": "w-full sm:max-w-[520px] lg:max-w-[640px]",
+      "surface": "glass_panel_strong",
+      "header": {
+        "elements": [
+          "Metric title + scope chips",
+          "Period summary",
+          "Close button"
+        ],
+        "classes": "border-b border-white/10 px-5 py-4"
+      },
+      "body": {
+        "sections": [
+          "Metric hero: value + delta + compare baseline",
+          "Breakdown chart area (height 220–260)",
+          "Ranked list or table (ScrollArea)"
+        ],
+        "classes": "px-5 py-4 space-y-4"
+      },
+      "footer": {
+        "cta": "View Full Report (primary teal) + Secondary action (ghost)",
+        "classes": "border-t border-white/10 px-5 py-4 flex items-center justify-between"
+      },
+      "data_testids": {
+        "sheet": "exec-kpi-detail-sheet",
+        "close": "exec-kpi-detail-sheet-close-button",
+        "view_report": "exec-kpi-detail-sheet-view-report-button"
+      }
+    },
+    "datapoint_drilldown_dialog_spec": {
+      "component": "Dialog",
+      "size": "w-[92vw] sm:max-w-[720px]",
+      "surface": "glass_panel_strong rounded-2xl",
+      "layout": [
+        "Header: title + subtitle (date/outlet) + actions",
+        "Body: mini chart (optional) + Table of entries",
+        "Footer: primary action (Open Journal) + secondary (Export CSV)"
+      ],
+      "table": {
+        "density": "compact",
+        "columns": ["Time", "Outlet", "Source", "Amount", "Reference"],
+        "row_action": "Open entry (icon button)"
+      },
+      "data_testids": {
+        "dialog": "exec-drilldown-dialog",
+        "close": "exec-drilldown-dialog-close-button",
+        "primary_action": "exec-drilldown-dialog-primary-button"
+      }
+    },
+    "outlet_leaderboard_card_spec": {
+      "purpose": "Ranked outlets with mini bars + trend arrows; click opens outlet drill-down modal.",
+      "anatomy": {
+        "row": [
+          "Rank badge (#1, #2...)",
+          "Outlet avatar (Avatar) or initials",
+          "Outlet name + city chip",
+          "Primary metric (tabular) + trend arrow",
+          "Mini horizontal bar (Progress)"
+        ],
+        "multi_metric_inline": "Show 2–3 micro metrics (Margin, Waste, Compliance) as tiny chips",
+        "interaction": [
+          "Row hover highlights with exec accent soft background",
+          "Row click opens Dialog with outlet profile + charts"
+        ]
+      },
+      "classes": {
+        "container": "rounded-[var(--exec-card-radius)] bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4",
+        "row": "flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white/6 transition-[background-color] duration-150",
+        "rank_badge": "h-7 w-7 rounded-full grid place-items-center text-xs font-semibold bg-white/6 border border-white/10",
+        "trend_up": "text-[hsl(var(--exec-positive))]",
+        "trend_down": "text-[hsl(var(--exec-negative))]"
+      },
+      "data_testids": {
+        "card": "exec-outlet-leaderboard-card",
+        "row": "exec-outlet-leaderboard-row-<outlet-id>",
+        "open": "exec-outlet-leaderboard-open-<outlet-id>"
+      }
+    },
+    "control_tower_feed_item_spec": {
+      "purpose": "Live alert stream with priority coding + resolve actions.",
+      "anatomy": {
+        "left": [
+          "Priority dot",
+          "Alert title + short description"
+        ],
+        "right": [
+          "Outlet chip",
+          "Timestamp",
+          "Actions: View / Resolve"
+        ]
+      },
+      "priority_colors": {
+        "p0_critical": "border-red-400/30 + dot bg-red-400",
+        "p1_high": "border-amber-400/30 + dot bg-amber-400",
+        "p2_medium": "border-sky-400/30 + dot bg-sky-400",
+        "p3_low": "border-white/10 + dot bg-white/30"
+      },
+      "classes": {
+        "item": "group flex items-start justify-between gap-3 rounded-2xl bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4 hover:bg-white/7 transition-[background-color,border-color] duration-200",
+        "dot": "mt-1.5 h-2.5 w-2.5 rounded-full shadow-[0_0_0_3px_rgba(255,255,255,0.06)]",
+        "title": "text-sm font-semibold",
+        "meta": "text-xs text-[hsl(var(--muted-foreground))]"
+      },
+      "actions": {
+        "view": "Button ghost sm",
+        "resolve": "Button secondary sm (or outline)"
+      },
+      "data_testids": {
+        "item": "exec-control-tower-alert-<alert-id>",
+        "view": "exec-control-tower-alert-view-<alert-id>",
+        "resolve": "exec-control-tower-alert-resolve-<alert-id>"
+      }
+    },
+    "motion_guidelines_exec": {
+      "libraries": {
+        "required": ["framer-motion"],
+        "optional": ["react-countup"]
+      },
+      "timings": {
+        "card_hover": "150–200ms",
+        "page_enter": "260–340ms",
+        "sheet_enter": "240ms",
+        "dialog_enter": "220ms",
+        "pulse": "900ms"
+      },
+      "easings": {
+        "standard": "cubic-bezier(0.2, 0.8, 0.2, 1)",
+        "snappy": "cubic-bezier(0.2, 0.9, 0.2, 1)"
+      },
+      "recipes": {
+        "card_entry_stagger": "Stagger KPI cards by 40ms; animate opacity 0->1 and y 10->0.",
+        "count_up": "On initial load, count KPI values from 0 to value over 650ms (respect reduced motion).",
+        "websocket_update_pulse": "When KPI updates, flash a 1px inner ring in exec accent + subtle background brighten for 600ms.",
+        "chart_hover_marker": "Active dot scales 1.0->1.15; tooltip fades in 120ms.",
+        "sheet_dialog": "Use motion for overlay fade + panel slide; avoid bouncing."
+      }
+    },
+    "empty_loading_error_states": {
+      "global": [
+        "Skeleton first: keep layout stable.",
+        "Empty states must be informative: show what data is missing + how to fix (change period/scope).",
+        "Errors must include Retry action and preserve context (period + scope)."
+      ],
+      "kpi_card": {
+        "loading": "Skeleton label + value + sparkline block (h-12).",
+        "empty": "Show '--' value + caption 'No data for selected period'.",
+        "error": "Inline Alert with Retry button (data-testid=exec-kpi-retry-<metric>)."
+      },
+      "charts": {
+        "loading": "Skeleton chart area (h-[260px]) + legend skeleton.",
+        "empty": "Centered message + small 'Adjust filters' button; keep axes hidden.",
+        "error": "Alert with 'Retry' + 'Open diagnostics' (optional)."
+      },
+      "leaderboard": {
+        "loading": "5 skeleton rows.",
+        "empty": "Message: 'No outlets in scope' + scope selector hint.",
+        "error": "Retry row at top."
+      },
+      "control_tower": {
+        "loading": "Skeleton feed items with dot + two lines.",
+        "empty": "Message: 'All clear' + subtle check icon (lucide).",
+        "error": "Banner alert at top + retry."
+      }
+    },
+    "performance_notes": {
+      "websocket": [
+        "Debounce KPI updates (e.g., 250–400ms) to avoid chart re-render storms.",
+        "Animate only the changed KPI card (pulse), not the whole grid."
+      ],
+      "charts": [
+        "Use memoized data transforms.",
+        "Prefer fewer ticks; avoid heavy gradients; keep tooltip lightweight."
+      ]
+    },
+    "implementation_checklist_for_main_agent": [
+      "Add exec-only CSS vars (exec accent blue + glow) in index.css for both .dark and .light.",
+      "Scope exec styling via a wrapper class on Exec pages (e.g., <div className=\"exec-portal\">) if needed.",
+      "Build PremiumPeriodPicker component using ToggleGroup + Popover + Calendar + Switch; ensure all controls have data-testid.",
+      "Build InteractiveKpiCard component: Card + sparkline + trend badge; keyboard accessible; data-testid on card/value/badge.",
+      "Implement Recharts CustomTooltip component with glass styling; add active dot marker and thin cursor line.",
+      "Wire click interactions: KPI card -> Sheet; chart datapoint -> Dialog; leaderboard row -> Dialog.",
+      "Add skeletons for KPI cards, charts, lists; keep heights stable.",
+      "Add WebSocket update pulse animation (respect prefers-reduced-motion).",
+      "Ensure no hardcoded hex in Exec components; use CSS vars only.",
+      "Verify dark/light mode contrast for tooltip, pills, and badges.",
+      "Ensure every interactive element and key metric has data-testid (kebab-case, role-based)."
+    ]
+  },
   "general_ui_ux_design_guidelines": [
     "You must **not** apply universal transition. Eg: `transition: all`. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms",
     "You must **not** center align the app container, ie do not add `.App { text-align: center; }` in the css file. This disrupts the human natural reading flow of text",
