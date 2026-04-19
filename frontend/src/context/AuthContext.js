@@ -43,7 +43,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     const res = await api.post('/api/auth/login', { email, password });
-    const { token, user: userData, permissions: perms } = res.data;
+    const { token, user: userData, permissions: perms, must_change_password } = res.data;
     localStorage.setItem('fnb_token', token);
     localStorage.setItem('fnb_user', JSON.stringify(userData));
     setUser(userData);
@@ -53,7 +53,7 @@ export const AuthProvider = ({ children }) => {
       const outletsRes = await api.get('/api/core/outlets');
       setOutlets(outletsRes.data.outlets || []);
     } catch (e) { console.error('Failed to load outlets', e); }
-    return userData;
+    return { user: userData, must_change_password: !!must_change_password };
   };
 
   const logout = () => {

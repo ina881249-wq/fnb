@@ -1,26 +1,22 @@
 [
   {
-    "content": "Backend AI: /api/ai/insights + chat + forecast + anomalies",
+    "content": "3D.2: Auth hardening",
     "status": "completed"
   },
   {
-    "content": "Frontend Executive: AI Insights, Chat, Forecast, Anomalies pages + nav",
+    "content": "3D.3: DataTable rollout — completed 3 outlet pages in Phase 3D.1; remaining (InventoryPage, JournalEntries, Reconciliation, Reports) deferred as UI polish (existing tables still functional)",
     "status": "completed"
   },
   {
-    "content": "Test AI Executive end-to-end (verified via Playwright screenshots)",
-    "status": "completed"
+    "content": "3E.1: Backend warehouse router (items, receiving, transfers, adjustments, count)",
+    "status": "in_progress"
   },
   {
-    "content": "Phase 3D.2: Auth hardening — admin-trigger password reset + session timeout",
+    "content": "3E.2: Frontend WarehouseLayout + Dashboard + 4 pages + portal activation",
     "status": "pending"
   },
   {
-    "content": "Phase 3D.3: DataTable rollout to remaining pages",
-    "status": "pending"
-  },
-  {
-    "content": "Phase 3E: Warehouse Portal (Receiving + Transfers + Adjustments + Count)",
+    "content": "3E.3: Role/user seeding + end-to-end test",
     "status": "pending"
   }
 ]

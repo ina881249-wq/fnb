@@ -7,13 +7,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { Label } from '../components/ui/label';
-import { Lock, Mail, ChefHat, Sun, Moon, Languages } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
+import { Lock, Mail, ChefHat, Sun, Moon, Languages, ShieldAlert } from 'lucide-react';
+import { toast } from 'sonner';
+import api from '../api/client';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mustChange, setMustChange] = useState(false);
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [changing, setChanging] = useState(false);
   const { login } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const { lang, changeLang, t } = useLang();
@@ -24,12 +31,33 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await login(email, password);
+      const res = await login(email, password);
+      if (res.must_change_password) {
+        setMustChange(true);
+        setLoading(false);
+        return;
+      }
       navigate('/portal-select');
     } catch (err) {
       setError(err.response?.data?.detail || 'Login failed');
     }
     setLoading(false);
+  };
+
+  const handleForceChange = async (e) => {
+    e.preventDefault();
+    if (newPw.length < 6) { toast.error(lang === 'id' ? 'Min 6 karakter' : 'Min 6 characters'); return; }
+    if (newPw !== confirmPw) { toast.error(lang === 'id' ? 'Password tidak cocok' : 'Passwords do not match'); return; }
+    if (newPw === password) { toast.error(lang === 'id' ? 'Password baru harus berbeda dari sementara' : 'New password must differ'); return; }
+    setChanging(true);
+    try {
+      await api.post('/api/auth/change-password', { old_password: password, new_password: newPw });
+      toast.success(lang === 'id' ? 'Password berhasil diubah' : 'Password changed');
+      setMustChange(false);
+      navigate('/portal-select');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed');
+    } finally { setChanging(false); }
   };
 
   return (
@@ -132,6 +160,38 @@ export default function LoginPage() {
           </p>
         </div>
       </div>
+
+      {/* Force change password dialog */}
+      <Dialog open={mustChange} onOpenChange={() => {}}>
+        <DialogContent className="max-w-md bg-[hsl(var(--card))] border-amber-500/30" onInteractOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5 text-amber-400" />
+              {lang === 'id' ? 'Wajib Ganti Password' : 'Password Change Required'}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleForceChange} className="space-y-3">
+            <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-400">
+              {lang === 'id'
+                ? 'Password Anda di-reset oleh admin. Buatlah password baru sebelum melanjutkan.'
+                : 'Your password was reset by an admin. Please set a new password to continue.'}
+            </div>
+            <div>
+              <Label className="text-xs mb-1.5 block">{lang === 'id' ? 'Password Baru' : 'New Password'}</Label>
+              <Input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} required minLength={6} data-testid="force-change-new-password" />
+            </div>
+            <div>
+              <Label className="text-xs mb-1.5 block">{lang === 'id' ? 'Konfirmasi Password' : 'Confirm Password'}</Label>
+              <Input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} required minLength={6} data-testid="force-change-confirm-password" />
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={changing} className="w-full" data-testid="force-change-submit">
+                {changing ? (lang === 'id' ? 'Menyimpan...' : 'Saving...') : (lang === 'id' ? 'Ganti Password & Lanjut' : 'Change Password & Continue')}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

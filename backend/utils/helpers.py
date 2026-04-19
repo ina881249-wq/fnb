@@ -117,5 +117,5 @@ PORTAL_LIST = [
     {"id": "outlet", "name": "Outlet Portal", "description": "Outlet-level control for managers and staff", "icon": "store", "status": "active"},
     {"id": "cashier", "name": "Cashier Portal", "description": "Point-of-sale, payment and shift handling for front-line staff", "icon": "credit-card", "status": "active"},
     {"id": "kitchen", "name": "Kitchen Portal", "description": "Production tasks for kitchen and prep staff", "icon": "chef-hat", "status": "coming_soon"},
-    {"id": "warehouse", "name": "Warehouse Portal", "description": "Receiving and stock movement management", "icon": "warehouse", "status": "coming_soon"},
+    {"id": "warehouse", "name": "Warehouse Portal", "description": "Receiving, transfers, adjustments and stock opname", "icon": "warehouse", "status": "active"},
 ]

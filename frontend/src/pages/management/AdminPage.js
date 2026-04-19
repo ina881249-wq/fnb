@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/ta
 import { Badge } from '../../components/ui/badge';
 import { Checkbox } from '../../components/ui/checkbox';
 import { ScrollArea } from '../../components/ui/scroll-area';
-import { Plus, Users, Shield, Building2, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Users, Shield, Building2, Pencil, Trash2, KeyRound, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function AdminPage() {
@@ -26,6 +26,9 @@ export default function AdminPage() {
   const [newUser, setNewUser] = useState({ email: '', password: '', name: '', role_ids: [], portal_access: [], outlet_access: [] });
   const [newRole, setNewRole] = useState({ name: '', description: '', permissions: [], portal_access: [] });
   const [loading, setLoading] = useState(true);
+  const [resetTarget, setResetTarget] = useState(null);
+  const [resetCustomPw, setResetCustomPw] = useState('');
+  const [resetResult, setResetResult] = useState(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -158,7 +161,7 @@ export default function AdminPage() {
                 <TableHeader>
                   <TableRow className="border-[var(--glass-border)] hover:bg-transparent">
                     <TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Portals</TableHead>
-                    <TableHead>Outlets</TableHead><TableHead>Status</TableHead>
+                    <TableHead>Outlets</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -170,12 +173,18 @@ export default function AdminPage() {
                             <span className="text-[10px] font-bold text-[hsl(var(--primary))]">{u.name?.charAt(0)}</span>
                           </div>
                           {u.name} {u.is_superadmin && <Badge className="text-[9px] bg-amber-500/20 text-amber-400 border-amber-500/30">Admin</Badge>}
+                          {u.must_change_password && <Badge className="text-[9px] bg-red-500/20 text-red-400 border-red-500/30">Reset Pending</Badge>}
                         </div>
                       </TableCell>
                       <TableCell className="text-[hsl(var(--muted-foreground))]">{u.email}</TableCell>
                       <TableCell><div className="flex gap-1 flex-wrap">{u.portal_access?.map(p => <Badge key={p} variant="outline" className="text-[9px]">{p}</Badge>)}</div></TableCell>
                       <TableCell className="text-sm">{u.outlet_access?.length || 0} outlets</TableCell>
                       <TableCell>{u.is_active ? <Badge className="text-[9px] bg-green-500/20 text-green-400 border-green-500/30">Active</Badge> : <Badge variant="destructive" className="text-[9px]">Inactive</Badge>}</TableCell>
+                      <TableCell className="text-right">
+                        <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => { setResetTarget(u); setResetCustomPw(''); setResetResult(null); }} data-testid={`admin-reset-pw-${u.id}`}>
+                          <KeyRound className="w-3 h-3" /> Reset PW
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -286,6 +295,60 @@ export default function AdminPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Admin reset password dialog */}
+      <Dialog open={!!resetTarget} onOpenChange={(o) => { if (!o) { setResetTarget(null); setResetResult(null); } }}>
+        <DialogContent className="max-w-md bg-[hsl(var(--card))] border-amber-500/30">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="w-5 h-5 text-amber-400" />
+              Reset Password
+            </DialogTitle>
+          </DialogHeader>
+          {!resetResult ? (
+            <div className="space-y-3">
+              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs">
+                Reset password untuk <strong>{resetTarget?.name}</strong> ({resetTarget?.email}).
+                User akan dipaksa mengganti password saat login berikutnya.
+              </div>
+              <div>
+                <Label className="text-xs mb-1.5 block">Password Sementara (opsional - kosongkan untuk auto-generate)</Label>
+                <Input value={resetCustomPw} onChange={(e) => setResetCustomPw(e.target.value)} placeholder="min 6 karakter" data-testid="admin-reset-custom-pw" />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setResetTarget(null)}>Batal</Button>
+                <Button variant="destructive" onClick={handleResetPassword} data-testid="admin-reset-submit">
+                  <KeyRound className="w-4 h-4 mr-1" /> Reset Password
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30 text-xs">
+                ✅ Password berhasil di-reset. Berikan password sementara ini ke user.
+              </div>
+              <div>
+                <Label className="text-xs mb-1.5 block">Email</Label>
+                <div className="px-3 py-2 rounded-lg bg-[var(--glass-bg-strong)] text-sm font-mono">{resetResult.email}</div>
+              </div>
+              <div>
+                <Label className="text-xs mb-1.5 block">Password Sementara</Label>
+                <div className="flex gap-2">
+                  <div className="px-3 py-2 flex-1 rounded-lg bg-[var(--glass-bg-strong)] text-sm font-mono font-semibold text-[hsl(var(--primary))]" data-testid="admin-reset-temp-password">
+                    {resetResult.temporary_password}
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => copyToClipboard(resetResult.temporary_password)}>
+                    <Copy className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <Button onClick={() => { setResetTarget(null); setResetResult(null); fetchData(); }} data-testid="admin-reset-done">Selesai</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

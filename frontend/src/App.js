@@ -54,6 +54,12 @@ import KitchenLayout from './layouts/KitchenLayout';
 import KitchenDashboard from './pages/kitchen/KitchenDashboard';
 import KitchenQueue from './pages/kitchen/KitchenQueue';
 import KitchenWaste from './pages/kitchen/KitchenWaste';
+import WarehouseLayout from './layouts/WarehouseLayout';
+import WarehouseDashboard from './pages/warehouse/WarehouseDashboard';
+import WarehouseReceiving from './pages/warehouse/WarehouseReceiving';
+import WarehouseTransfers from './pages/warehouse/WarehouseTransfers';
+import WarehouseAdjustments from './pages/warehouse/WarehouseAdjustments';
+import WarehouseCounts from './pages/warehouse/WarehouseCounts';
 import './App.css';
 
 const ProtectedRoute = ({ children }) => {
@@ -152,6 +158,16 @@ function AppRoutes() {
         <Route path="queue" element={<KitchenQueue />} />
         <Route path="waste" element={<KitchenWaste />} />
         <Route index element={<Navigate to="queue" />} />
+      </Route>
+
+      {/* Warehouse Portal */}
+      <Route path="/warehouse" element={<ProtectedRoute><WarehouseLayout /></ProtectedRoute>}>
+        <Route path="dashboard" element={<WarehouseDashboard />} />
+        <Route path="receiving" element={<WarehouseReceiving />} />
+        <Route path="transfers" element={<WarehouseTransfers />} />
+        <Route path="adjustments" element={<WarehouseAdjustments />} />
+        <Route path="counts" element={<WarehouseCounts />} />
+        <Route index element={<Navigate to="dashboard" />} />
       </Route>
 
       {/* Coming Soon Portals */}

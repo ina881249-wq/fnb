@@ -15,7 +15,7 @@ const portalConfig = [
   { id: 'outlet', name: 'Outlet Portal', description: 'Outlet-level daily operations and controls', icon: Store, color: 'from-blue-500/20 to-indigo-500/20', borderColor: 'border-blue-500/30', status: 'active' },
   { id: 'cashier', name: 'Cashier Portal', description: 'POS transactions, payment, and shift handling', icon: CreditCard, color: 'from-green-500/20 to-emerald-500/20', borderColor: 'border-green-500/30', status: 'active' },
   { id: 'kitchen', name: 'Kitchen Portal', description: 'Order queue, prep tracking, and waste logging', icon: ChefHat, color: 'from-amber-500/20 to-orange-500/20', borderColor: 'border-amber-500/30', status: 'active' },
-  { id: 'warehouse', name: 'Warehouse Portal', description: 'Receiving and stock movement management', icon: Warehouse, color: 'from-purple-500/20 to-indigo-500/20', borderColor: 'border-purple-500/30', status: 'coming_soon' },
+  { id: 'warehouse', name: 'Warehouse Portal', description: 'Receiving, transfers, adjustments, and stock counts', icon: Warehouse, color: 'from-purple-500/20 to-indigo-500/20', borderColor: 'border-purple-500/30', status: 'active' },
 ];
 
 export default function PortalSelector() {
@@ -36,6 +36,8 @@ export default function PortalSelector() {
       navigate('/cashier/dashboard');
     } else if (portalId === 'kitchen') {
       navigate('/kitchen/queue');
+    } else if (portalId === 'warehouse') {
+      navigate('/warehouse/dashboard');
     }
   };
 

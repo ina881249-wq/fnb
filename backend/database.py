@@ -49,6 +49,12 @@ waste_logs_col = db["waste_logs"]
 # AI Executive
 ai_conversations_col = db["ai_conversations"]
 ai_insights_cache_col = db["ai_insights_cache"]
+# Phase 3E — Warehouse Portal
+warehouse_receipts_col = db["warehouse_receipts"]
+warehouse_transfers_col = db["warehouse_transfers"]
+warehouse_adjustments_col = db["warehouse_adjustments"]
+warehouse_counts_col = db["warehouse_counts"]
+suppliers_col = db["suppliers"]
 
 async def create_indexes():
     await users_col.create_index("email", unique=True)

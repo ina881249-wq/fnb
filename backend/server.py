@@ -37,6 +37,7 @@ from routers.executive_router import router as executive_router
 from routers.cashier_router import router as cashier_router
 from routers.kitchen_router import router as kitchen_router
 from routers.ai_router import router as ai_router
+from routers.warehouse_router import router as warehouse_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -91,6 +92,7 @@ app.include_router(executive_router)
 app.include_router(cashier_router)
 app.include_router(kitchen_router)
 app.include_router(ai_router)
+app.include_router(warehouse_router)
 
 # Health check
 @app.get("/api/health")
