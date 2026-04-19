@@ -1,22 +1,38 @@
 [
   {
-    "content": "3D.2: Auth hardening",
+    "content": "Review DataTable component API & current state of target pages",
     "status": "completed"
   },
   {
-    "content": "3D.3: DataTable rollout — completed 3 outlet pages in Phase 3D.1; remaining (InventoryPage, JournalEntries, Reconciliation, Reports) deferred as UI polish (existing tables still functional)",
+    "content": "Fix DataTable client-side pagination bug (pagination buttons)",
     "status": "completed"
   },
   {
-    "content": "3E.1: Backend warehouse router (items, receiving, transfers, adjustments, count)",
+    "content": "Refactor InventoryPage: Stock + Items + Movements tables to DataTable",
     "status": "in_progress"
   },
   {
-    "content": "3E.2: Frontend WarehouseLayout + Dashboard + 4 pages + portal activation",
+    "content": "Refactor JournalEntriesPage list to DataTable",
     "status": "pending"
   },
   {
-    "content": "3E.3: Role/user seeding + end-to-end test",
+    "content": "Refactor ReconciliationPage list to DataTable",
+    "status": "pending"
+  },
+  {
+    "content": "Skip ProductionPage (kanban is optimal)",
+    "status": "completed"
+  },
+  {
+    "content": "Skip RecipeBOMPage (card grid is optimal)",
+    "status": "completed"
+  },
+  {
+    "content": "Build lint check + screenshot verification",
+    "status": "pending"
+  },
+  {
+    "content": "Update plan.md to mark Phase 3D.3 complete",
     "status": "pending"
   }
 ]

@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import api from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
@@ -9,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog';
 import { Badge } from '../../components/ui/badge';
-import { Plus, BookOpen, Check, Search, ArrowLeftRight, RotateCcw } from 'lucide-react';
+import { DataTable } from '../../components/common/DataTable';
+import { Plus, BookOpen, Check, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 
 const formatCurrency = (val) => `Rp ${(val || 0).toLocaleString('id-ID')}`;
@@ -28,8 +28,10 @@ export default function JournalEntriesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [selectedJournal, setSelectedJournal] = useState(null);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sourceFilter, setSourceFilter] = useState('all');
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
   const [newJournal, setNewJournal] = useState({
     posting_date: new Date().toISOString().split('T')[0],
@@ -41,7 +43,9 @@ export default function JournalEntriesPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const params = { skip: page * 20, limit: 20, search, status: statusFilter, outlet_id: currentOutlet || '' };
+      const params = { skip: page * pageSize, limit: pageSize, search, outlet_id: currentOutlet || '' };
+      if (statusFilter !== 'all') params.status = statusFilter;
+      if (sourceFilter !== 'all') params.source_type = sourceFilter;
       const [jRes, coaRes] = await Promise.all([
         api.get('/api/journals', { params }),
         api.get('/api/coa', { params: { active_only: true } }),
@@ -53,17 +57,13 @@ export default function JournalEntriesPage() {
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, [page, search, statusFilter, currentOutlet]);
+  useEffect(() => { fetchData(); }, [page, pageSize, search, statusFilter, sourceFilter, currentOutlet]);
 
-  const addLine = () => {
-    setNewJournal(prev => ({ ...prev, lines: [...prev.lines, { account_id: '', debit: 0, credit: 0, description: '' }] }));
-  };
-
+  const addLine = () => setNewJournal(prev => ({ ...prev, lines: [...prev.lines, { account_id: '', debit: 0, credit: 0, description: '' }] }));
   const removeLine = (idx) => {
     if (newJournal.lines.length <= 2) return;
     setNewJournal(prev => ({ ...prev, lines: prev.lines.filter((_, i) => i !== idx) }));
   };
-
   const updateLine = (idx, field, value) => {
     setNewJournal(prev => {
       const lines = [...prev.lines];
@@ -115,6 +115,35 @@ export default function JournalEntriesPage() {
     } catch (err) { toast.error('Failed to load journal'); }
   };
 
+  const columns = useMemo(() => [
+    { key: 'journal_number', label: 'Journal #', render: (v) => <span className="font-mono text-xs text-[hsl(var(--primary))]">{v}</span> },
+    { key: 'posting_date', label: 'Date', render: (v) => <span className="text-sm">{v}</span> },
+    { key: 'description', label: 'Description', cellClassName: 'max-w-[220px] truncate' },
+    { key: 'source_type', label: 'Source', render: (v) => <Badge variant="outline" className="text-[9px]">{v}</Badge> },
+    { key: 'outlet_name', label: 'Outlet', render: (v) => <span className="text-sm text-[hsl(var(--muted-foreground))]">{v || 'HQ'}</span> },
+    { key: 'total_debit', label: 'Debit', align: 'right', render: (v) => <span className="text-sm">{formatCurrency(v)}</span> },
+    { key: 'total_credit', label: 'Credit', align: 'right', render: (v) => <span className="text-sm">{formatCurrency(v)}</span> },
+    { key: 'status', label: 'Status', render: (v) => <Badge variant="outline" className={`text-[9px] ${statusColors[v] || ''}`}>{v}</Badge> },
+    {
+      key: 'actions', label: 'Actions',
+      render: (_, row) => (
+        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+          {row.status === 'draft' && <Button size="sm" variant="ghost" className="h-7 px-2 text-green-400 hover:bg-green-500/10" onClick={() => handlePost(row.id)} title="Post"><Check className="w-3.5 h-3.5" /></Button>}
+          {row.status === 'posted' && <Button size="sm" variant="ghost" className="h-7 px-2 text-red-400 hover:bg-red-500/10" onClick={() => handleReverse(row.id)} title="Reverse"><RotateCcw className="w-3.5 h-3.5" /></Button>}
+        </div>
+      ),
+    },
+  ], []);
+
+  const filters = [
+    { key: 'status', label: 'Status', value: statusFilter, onChange: (v) => { setStatusFilter(v); setPage(0); }, options: [
+        { value: 'draft', label: 'Draft' }, { value: 'posted', label: 'Posted' }, { value: 'reversed', label: 'Reversed' },
+    ]},
+    { key: 'source', label: 'Source', value: sourceFilter, onChange: (v) => { setSourceFilter(v); setPage(0); }, options: [
+        { value: 'manual', label: 'Manual' }, { value: 'sales', label: 'Sales' }, { value: 'petty_cash', label: 'Petty Cash' }, { value: 'cash_movement', label: 'Cash Movement' },
+    ]},
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -137,7 +166,6 @@ export default function JournalEntriesPage() {
                 </div>
               </div>
               <div><Label>Description</Label><Input value={newJournal.description} onChange={e => setNewJournal({...newJournal, description: e.target.value})} className="bg-[hsl(var(--secondary))]" required /></div>
-              
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <Label>Journal Lines</Label>
@@ -174,66 +202,24 @@ export default function JournalEntriesPage() {
         </Dialog>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-2.5 w-4 h-4 text-[hsl(var(--muted-foreground))]" />
-          <Input placeholder="Search journals..." value={search} onChange={e => { setSearch(e.target.value); setPage(0); }} className="pl-10 bg-[hsl(var(--secondary))] border-[var(--glass-border)]" />
-        </div>
-        <Select value={statusFilter || 'all'} onValueChange={v => { setStatusFilter(v === 'all' ? '' : v); setPage(0); }}>
-          <SelectTrigger className="w-[150px] bg-[var(--glass-bg)] border-[var(--glass-border)]"><SelectValue placeholder="All Status" /></SelectTrigger>
-          <SelectContent><SelectItem value="all">All Status</SelectItem><SelectItem value="draft">Draft</SelectItem><SelectItem value="posted">Posted</SelectItem><SelectItem value="reversed">Reversed</SelectItem></SelectContent>
-        </Select>
-      </div>
-
-      {/* Journals Table */}
-      <Card className="bg-[var(--glass-bg)] border-[var(--glass-border)] backdrop-blur-xl">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-[var(--glass-border)] hover:bg-transparent">
-                <TableHead>Journal #</TableHead><TableHead>Date</TableHead><TableHead>Description</TableHead>
-                <TableHead>Source</TableHead><TableHead>Outlet</TableHead>
-                <TableHead className="text-right">Debit</TableHead><TableHead className="text-right">Credit</TableHead>
-                <TableHead>Status</TableHead><TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {journals.length === 0 ? (
-                <TableRow><TableCell colSpan={9} className="text-center py-8 text-[hsl(var(--muted-foreground))]">No journal entries yet. Create your first journal or record a financial transaction.</TableCell></TableRow>
-              ) : journals.map(j => (
-                <TableRow key={j.id} className="border-[var(--glass-border)] hover:bg-white/5 cursor-pointer" onClick={() => viewDetail(j.id)}>
-                  <TableCell className="font-mono text-xs text-[hsl(var(--primary))]">{j.journal_number}</TableCell>
-                  <TableCell className="text-sm">{j.posting_date}</TableCell>
-                  <TableCell className="max-w-[200px] truncate">{j.description}</TableCell>
-                  <TableCell><Badge variant="outline" className="text-[9px]">{j.source_type}</Badge></TableCell>
-                  <TableCell className="text-sm text-[hsl(var(--muted-foreground))]">{j.outlet_name || 'HQ'}</TableCell>
-                  <TableCell className="text-right text-sm" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(j.total_debit)}</TableCell>
-                  <TableCell className="text-right text-sm" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(j.total_credit)}</TableCell>
-                  <TableCell><Badge variant="outline" className={`text-[9px] ${statusColors[j.status] || ''}`}>{j.status}</Badge></TableCell>
-                  <TableCell onClick={e => e.stopPropagation()}>
-                    <div className="flex gap-1">
-                      {j.status === 'draft' && <Button size="sm" variant="ghost" className="h-7 px-2 text-green-400 hover:bg-green-500/10" onClick={() => handlePost(j.id)} title="Post"><Check className="w-3.5 h-3.5" /></Button>}
-                      {j.status === 'posted' && <Button size="sm" variant="ghost" className="h-7 px-2 text-red-400 hover:bg-red-500/10" onClick={() => handleReverse(j.id)} title="Reverse"><RotateCcw className="w-3.5 h-3.5" /></Button>}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Pagination */}
-      {total > 20 && (
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-[hsl(var(--muted-foreground))]">Showing {page * 20 + 1}-{Math.min((page + 1) * 20, total)} of {total}</span>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)} className="border-[var(--glass-border)]">Previous</Button>
-            <Button variant="outline" size="sm" disabled={(page + 1) * 20 >= total} onClick={() => setPage(p => p + 1)} className="border-[var(--glass-border)]">Next</Button>
-          </div>
-        </div>
-      )}
+      <DataTable
+        data={journals}
+        columns={columns}
+        total={total}
+        page={page}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={(s) => { setPageSize(s); setPage(0); }}
+        searchValue={search}
+        onSearchChange={(v) => { setSearch(v); setPage(0); }}
+        searchPlaceholder="Search journals (number, description)..."
+        filters={filters}
+        loading={loading}
+        onRowClick={(row) => viewDetail(row.id)}
+        emptyIcon={<BookOpen className="w-10 h-10 opacity-30" />}
+        emptyTitle="No journal entries"
+        emptyDescription="Create your first journal or post a financial transaction."
+      />
 
       {/* Journal Detail Dialog */}
       <Dialog open={!!selectedJournal} onOpenChange={() => setSelectedJournal(null)}>

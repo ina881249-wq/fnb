@@ -241,7 +241,7 @@ export const DataTable = ({
             <Button
               variant="outline" size="sm"
               disabled={page === 0}
-              onClick={() => isServerSide ? onPageChange(page - 1) : null}
+              onClick={() => onPageChange ? onPageChange(page - 1) : null}
               className="h-7 w-7 p-0 border-[var(--glass-border)]"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -250,7 +250,7 @@ export const DataTable = ({
             <Button
               variant="outline" size="sm"
               disabled={page + 1 >= totalPages}
-              onClick={() => isServerSide ? onPageChange(page + 1) : null}
+              onClick={() => onPageChange ? onPageChange(page + 1) : null}
               className="h-7 w-7 p-0 border-[var(--glass-border)]"
             >
               <ChevronRight className="w-4 h-4" />
