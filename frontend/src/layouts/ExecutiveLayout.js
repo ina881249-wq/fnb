@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Separator } from '../components/ui/separator';
 import {
   BarChart3, TrendingUp, DollarSign, Building2, Package, AlertTriangle,
-  LogOut, Bell, Sun, Moon, Languages, ArrowLeft, PieChart, Activity
+  LogOut, Bell, Sun, Moon, Languages, ArrowLeft, PieChart, Activity,
+  Sparkles, MessageCircle, LineChart, Wand2
 } from 'lucide-react';
 
 const navItems = [
@@ -18,6 +19,10 @@ const navItems = [
   { to: '/executive/outlets', label: 'Outlet Performance', icon: Building2 },
   { to: '/executive/inventory', label: 'Inventory Health', icon: Package },
   { to: '/executive/control-tower', label: 'Control Tower', icon: AlertTriangle },
+  { to: '/executive/ai-insights', label: 'AI Insights', icon: Sparkles, ai: true },
+  { to: '/executive/ai-chat', label: 'AI Chat', icon: MessageCircle, ai: true },
+  { to: '/executive/ai-forecast', label: 'AI Forecast', icon: LineChart, ai: true },
+  { to: '/executive/ai-anomalies', label: 'AI Anomalies', icon: Wand2, ai: true },
 ];
 
 export default function ExecutiveLayout() {
@@ -77,12 +82,12 @@ export default function ExecutiveLayout() {
                   className={({ isActive }) =>
                     `flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors
                     ${isActive
-                      ? 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] font-medium'
-                      : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:bg-[var(--glass-bg)]'}`
+                      ? (item.ai ? 'bg-gradient-to-r from-[hsl(var(--primary))]/15 to-purple-500/15 text-[hsl(var(--primary))] font-medium border border-[hsl(var(--primary))]/30' : 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] font-medium')
+                      : (item.ai ? 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/5' : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:bg-[var(--glass-bg)]')}`
                   }
                   data-testid={`exec-nav-${item.label.toLowerCase().replace(/\s/g, '-')}`}
                 >
-                  <Icon className="w-4 h-4" />
+                  <Icon className={`w-4 h-4 ${item.ai ? 'text-[hsl(var(--primary))]' : ''}`} />
                   <span>{item.label}</span>
                 </NavLink>
               );

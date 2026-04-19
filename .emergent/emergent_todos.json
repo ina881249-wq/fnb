@@ -1,18 +1,26 @@
 [
   {
-    "content": "Phase 3B: Kitchen Portal MVP",
+    "content": "Backend AI: /api/ai/insights + chat + forecast + anomalies",
     "status": "completed"
   },
   {
-    "content": "Phase 3C: Daily Closing integrated with Cashier shifts + discrepancies",
+    "content": "Frontend Executive: AI Insights, Chat, Forecast, Anomalies pages + nav",
     "status": "completed"
   },
   {
-    "content": "Phase 3D.1: DataTable rollout (Cash Management + Sales Summary + Petty Cash)",
+    "content": "Test AI Executive end-to-end (verified via Playwright screenshots)",
     "status": "completed"
   },
   {
-    "content": "Phase 3D.2: Final comprehensive regression testing via testing agent",
-    "status": "completed"
+    "content": "Phase 3D.2: Auth hardening — admin-trigger password reset + session timeout",
+    "status": "pending"
+  },
+  {
+    "content": "Phase 3D.3: DataTable rollout to remaining pages",
+    "status": "pending"
+  },
+  {
+    "content": "Phase 3E: Warehouse Portal (Receiving + Transfers + Adjustments + Count)",
+    "status": "pending"
   }
 ]

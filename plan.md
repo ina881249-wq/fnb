@@ -2,7 +2,7 @@
 
 ## 1) Objectives
 - Menjaga baseline yang sudah stabil (Phase 1 & 2) sambil memperluas platform menjadi **workflow operasional end-to-end** dari frontliner (**Cashier/Kitchen**) sampai kontrol (Outlet/Management/Executive).
-- Tetap memakai arsitektur **modular monolith** (FastAPI + MongoDB) dengan batas domain jelas (finance, inventory, approvals, closing, POS, kitchen) agar portal baru bisa ditambahkan tanpa redesign.
+- Tetap memakai arsitektur **modular monolith** (FastAPI + MongoDB) dengan batas domain jelas (finance, inventory, approvals, closing, POS, kitchen, warehouse) agar portal baru bisa ditambahkan tanpa redesign.
 - Menjadikan finance + inventory **audit-grade** dan **control-grade**:
   - Double-entry accounting via **COA + Journal Engine + posting service**
   - Kontrol operasional via **reconciliation, daily closing, approvals, alerts**
@@ -12,6 +12,9 @@
   - workflow-first screens untuk outlet ops (closing-driven)
   - konsistensi navigasi + tindakan kontekstual
 - Menjadikan **Cashier Portal & Kitchen Portal** sebagai sumber data transaksi/produksi yang mengalir ke outlet closing dan approval.
+- Menambahkan **AI Control Tower untuk Executive**:
+  - Auto-narrative briefing, chat Q&A berbasis data internal, forecast, dan anomaly detection
+  - Fokus: actionable insight, investigasi cepat, dan early warning operasional
 
 > **Current status (updated):**
 > - Baseline Phase 1 & 2: **COMPLETE**
@@ -21,8 +24,10 @@
 > - **Phase 3B Kitchen Portal MVP: COMPLETE** (backend + frontend + basic E2E verified)
 > - **Phase 3C Daily Closing Integration: COMPLETE** (shift summary + discrepancy detection + UI integration)
 > - **Phase 3D.1 DataTable Rollout (Outlet pages): COMPLETE** (Cash, Sales Summary, Petty Cash)
+> - **Phase 3F AI Executive Portal: COMPLETE** (Insights + Chat + Forecast + Anomalies; verified via Playwright)
 > - **All key portals active:** Executive, Management, Outlet, Cashier, Kitchen
-> - Latest testing: **Backend 100%**, **Frontend 95%** (minor: beberapa fitur pagination DataTable tidak terlihat pada dataset tertentu; bukan bug fungsional)
+> - Latest testing: **Backend 100%**, **Frontend 95%**
+>   - catatan minor: pagination UI DataTable kadang tidak muncul jika dataset < pageSize (expected behavior)
 
 ---
 
@@ -173,7 +178,7 @@ Acceptance criteria — Met.
   - reuse `pos_orders` untuk ticket + kitchen status
   - `waste_logs` untuk pencatatan waste
 - Integration:
-  - Saat POS order dibayar, backend broadcast event `kitchen_ticket_new` (untuk real-time next step)
+  - Saat POS order dibayar, backend broadcast event `kitchen_ticket_new` (real-time next step)
   - Waste log (jika item_id ada) membuat `stock_movements` type `waste` (traceability)
 
 #### Frontend (Delivered)
@@ -232,15 +237,21 @@ Delivered (client-side DataTable standardization):
 Quality:
 - Tested via UI navigation + testing agent.
 
-#### Phase 3D.2 — Auth & Security Hardening (UPCOMING)
-Scope:
-- Password reset flow (email/token atau admin-trigger reset)
-- Session timeout / refresh token strategy (bila diperlukan)
+#### Phase 3D.2 — Auth & Security Hardening (UPCOMING; user choice: admin-trigger reset)
+Scope (revised):
+- **Admin-trigger password reset**
+  - endpoint admin: generate temporary password
+  - enforce user must change password on next login (flag `must_change_password`)
+  - audit log for reset actions
+- Session timeout behavior (clarify + harden)
+  - clear idle timeout UI messaging
+  - optional server-side token invalidation list (lightweight)
 - User invite (optional)
-- 2FA (later; jika jadi prioritas)
+  - create user with temporary password + role + outlet access
 
 Acceptance criteria:
-- Pengguna bisa reset password dengan aman.
+- Admin bisa reset password user dengan aman, tercatat di audit.
+- User dipaksa ganti password setelah reset.
 - Session behavior jelas dan tidak mudah disalahgunakan.
 
 #### Phase 3D.3 — DataTable rollout (remaining modules) (UPCOMING)
@@ -251,7 +262,7 @@ Scope:
   - Recipes
   - Production Orders
   - Approvals
-  - Audit Trail
+  - Audit Trail (cek keseragaman config)
   - Reconciliation
   - Journal Entries (upgrade ke standard DataTable + filters)
 - (Opsional) migrasi ke server-side pagination untuk dataset besar.
@@ -262,14 +273,82 @@ Acceptance criteria:
 
 ---
 
+### Phase 3E — Warehouse Portal (UPCOMING; scope: FULL)
+Scope target:
+- Receiving (PO-less receiving / supplier delivery note)
+- Transfers antar-outlet (request → approve → ship → receive)
+- Stock Adjustments (reason-coded)
+- Inventory Count (stock opname) + variance posting
+
+Notes:
+- Harus terhubung ke `stock_movements` dan (opsional) journal posting bila biaya inventori perlu dibukukan.
+
+Acceptance criteria:
+- Warehouse operations bisa dilakukan end-to-end dan tercermin di stock movement ledger.
+- Transfer antar outlet punya traceability lengkap (source/destination + status transitions).
+
+---
+
+## Phase 3F — AI Executive Portal (COMPLETE)
+**User priority decision:** kerjakan AI Executive dulu (impact tinggi).
+
+### Delivered Features (All completed; verified)
+1) **AI Insights (Auto-narrative Briefing)**
+   - Endpoint: `POST /api/ai/insights`
+   - Output: briefing eksekutif dalam Bahasa Indonesia (sections: Ringkasan Utama, Performa Outlet, Perhatian Khusus, Rekomendasi)
+   - Caching harian via `ai_insights_cache`
+2) **AI Chat Assistant (Q&A berbasis data)**
+   - Endpoints:
+     - `POST /api/ai/chat`
+     - `GET /api/ai/chat/sessions`
+     - `GET /api/ai/chat/sessions/{session_id}`
+     - `DELETE /api/ai/chat/sessions/{session_id}`
+   - Session-based memory per user via `ai_conversations`
+   - Context injection: 30 hari data ringkas (sales, waste, variance, alerts, top items)
+3) **AI Forecasting**
+   - Endpoint: `POST /api/ai/forecast`
+   - Baseline forecast: trend + weekday seasonality (simple, explainable)
+   - AI narration: proyeksi ringkas + pola + implikasi operasional
+4) **AI Anomaly Detection + Explanation**
+   - Endpoint: `POST /api/ai/anomalies`
+   - Anomalies:
+     - revenue spike/drop (z-score)
+     - waste spike (z-score)
+     - cashier variance besar
+     - active alerts summary
+   - AI explanation: interpretasi otomatis + prioritas tindakan + hipotesis akar masalah
+
+### Model / Provider
+- Provider: **Emergent Universal Key**
+- Model default: **Anthropic `claude-sonnet-4-5-20250929`**
+  - Catatan: OpenAI sempat 502 pada environment ini, sehingga default dipindah ke Claude.
+
+### Frontend (Delivered)
+- Executive nav + pages:
+  - `/executive/ai-insights`
+  - `/executive/ai-chat`
+  - `/executive/ai-forecast`
+  - `/executive/ai-anomalies`
+- Verified via Playwright screenshots untuk semua halaman.
+
+### Data Storage
+- Collections:
+  - `ai_conversations` (chat history)
+  - `ai_insights_cache` (cached daily insights)
+
+Acceptance criteria — Met.
+
+---
+
 ## 3) Next Actions (immediate)
 1) **Mulai Phase 3D.2 (Auth hardening)**
-   - definisi metode reset password (email vs admin reset)
-   - implement endpoint + UI
+   - Admin-trigger reset password + force change on next login
+   - Session timeout messaging + lightweight security improvements
+   - (Optional) user invite
 2) **Lanjut Phase 3D.3 (DataTable rollout sisanya)**
-   - prioritas: Items/Stock Movements/Reconciliation/Approvals/Audit
-3) **Mulai Phase 3E (Warehouse Portal)** (jika sudah prioritas)
-   - receiving, putaway, inter-outlet transfer, stock adjustments
+   - prioritas: Items/Stock Movements/Reconciliation/Approvals/Audit/Journal
+3) **Mulai Phase 3E (Warehouse Portal — Full scope)**
+   - receiving, transfer antar outlet, stock adjustment, inventory count
 
 ---
 
@@ -282,6 +361,8 @@ Acceptance criteria:
   - cashier close shift → outlet review → system validate → submit approval → finance finalize/lock.
 - Finance tetap **double-entry**, dan laporan makin journal-driven.
 - UI operasional-grade: DataTable konsisten, filter/pagination stabil, saved views/bulk actions bertahap.
+- Executive control tower makin proaktif dengan AI:
+  - briefing otomatis, anomaly detection, dan forecasting untuk tindakan cepat.
 
 ---
 
@@ -302,3 +383,7 @@ Dashboard, POS, Orders, Shift
 
 ### Kitchen Portal (Phase 3B — Delivered)
 Dashboard, Queue, Waste
+
+### Executive Portal (AI — Delivered)
+Overview, Revenue Analytics, Expense Analytics, Outlet Performance, Inventory Health, Control Tower,
+**AI Insights, AI Chat, AI Forecast, AI Anomalies**

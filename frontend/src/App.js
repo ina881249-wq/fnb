@@ -41,6 +41,10 @@ import ExecExpenses from './pages/executive/ExecExpenses';
 import ExecOutlets from './pages/executive/ExecOutlets';
 import ExecInventory from './pages/executive/ExecInventory';
 import ControlTower from './pages/executive/ControlTower';
+import AIInsights from './pages/executive/AIInsights';
+import AIChat from './pages/executive/AIChat';
+import AIForecast from './pages/executive/AIForecast';
+import AIAnomalies from './pages/executive/AIAnomalies';
 import CashierLayout from './layouts/CashierLayout';
 import CashierDashboard from './pages/cashier/CashierDashboard';
 import POSPage from './pages/cashier/POSPage';
@@ -115,6 +119,10 @@ function AppRoutes() {
         <Route path="outlets" element={<ExecOutlets />} />
         <Route path="inventory" element={<ExecInventory />} />
         <Route path="control-tower" element={<ControlTower />} />
+        <Route path="ai-insights" element={<AIInsights />} />
+        <Route path="ai-chat" element={<AIChat />} />
+        <Route path="ai-forecast" element={<AIForecast />} />
+        <Route path="ai-anomalies" element={<AIAnomalies />} />
         <Route index element={<Navigate to="overview" />} />
       </Route>
 

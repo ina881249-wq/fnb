@@ -46,6 +46,9 @@ cashier_shifts_col = db["cashier_shifts"]
 pos_orders_col = db["pos_orders"]
 # Phase 3B — Kitchen Portal collections
 waste_logs_col = db["waste_logs"]
+# AI Executive
+ai_conversations_col = db["ai_conversations"]
+ai_insights_cache_col = db["ai_insights_cache"]
 
 async def create_indexes():
     await users_col.create_index("email", unique=True)
