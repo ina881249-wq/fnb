@@ -80,10 +80,59 @@ def generate_excel(report_type: str, data: dict) -> bytes:
         ws.cell(row=row, column=1).font = Font(bold=True, size=14)
         row += 1
         assets = data.get("assets", {})
-        for key, val in assets.items():
-            ws.cell(row=row, column=1, value=key.replace("_", " ").title())
-            ws.cell(row=row, column=2, value=val)
+        for a in assets.get("accounts", []):
+            ws.cell(row=row, column=1, value=f"{a.get('account_code', '')} {a.get('account_name', '')}")
+            ws.cell(row=row, column=2, value=a.get("balance", 0))
             row += 1
+        ws.cell(row=row, column=1, value="Total Assets").font = Font(bold=True)
+        ws.cell(row=row, column=2, value=assets.get("total", 0)).font = Font(bold=True)
+        row += 2
+
+        ws.cell(row=row, column=1, value="LIABILITIES")
+        ws.cell(row=row, column=1).font = Font(bold=True, size=14)
+        row += 1
+        liab = data.get("liabilities", {})
+        for a in liab.get("accounts", []):
+            ws.cell(row=row, column=1, value=f"{a.get('account_code', '')} {a.get('account_name', '')}")
+            ws.cell(row=row, column=2, value=a.get("balance", 0))
+            row += 1
+        ws.cell(row=row, column=1, value="Total Liabilities").font = Font(bold=True)
+        ws.cell(row=row, column=2, value=liab.get("total", 0)).font = Font(bold=True)
+        row += 2
+
+        ws.cell(row=row, column=1, value="EQUITY")
+        ws.cell(row=row, column=1).font = Font(bold=True, size=14)
+        row += 1
+        eq = data.get("equity", {})
+        for a in eq.get("accounts", []):
+            ws.cell(row=row, column=1, value=f"{a.get('account_code', '')} {a.get('account_name', '')}")
+            ws.cell(row=row, column=2, value=a.get("balance", 0))
+            row += 1
+        ws.cell(row=row, column=1, value="Retained (current period)")
+        ws.cell(row=row, column=2, value=eq.get("retained_earnings_current_period", 0))
+        row += 1
+        ws.cell(row=row, column=1, value="Total Equity").font = Font(bold=True)
+        ws.cell(row=row, column=2, value=eq.get("total", 0)).font = Font(bold=True)
+
+    elif report_type == "trial-balance":
+        headers = ["Code", "Account", "Type", "Debit", "Credit", "Balance"]
+        for col, h in enumerate(headers, 1):
+            cell = ws.cell(row=row, column=col, value=h)
+            cell.font = header_font
+            cell.fill = header_fill
+        row += 1
+        for r in data.get("rows", []):
+            ws.cell(row=row, column=1, value=r.get("account_code", ""))
+            ws.cell(row=row, column=2, value=r.get("account_name", ""))
+            ws.cell(row=row, column=3, value=r.get("account_type", ""))
+            ws.cell(row=row, column=4, value=r.get("debit", 0))
+            ws.cell(row=row, column=5, value=r.get("credit", 0))
+            ws.cell(row=row, column=6, value=r.get("balance", 0))
+            row += 1
+        row += 1
+        ws.cell(row=row, column=3, value="Total:").font = Font(bold=True)
+        ws.cell(row=row, column=4, value=data.get("total_debit", 0)).font = Font(bold=True)
+        ws.cell(row=row, column=5, value=data.get("total_credit", 0)).font = Font(bold=True)
     
     elif report_type == "inventory-valuation":
         headers = ["Item", "Category", "UOM", "Quantity", "Cost/Unit", "Value", "Outlet"]

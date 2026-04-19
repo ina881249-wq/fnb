@@ -314,8 +314,19 @@ async def close_shift(shift_id: str, req: ShiftCloseRequest, current_user: dict 
             summary_payload["online_sales"] += existing_ss.get("online_sales", 0)
             summary_payload["other_sales"] += existing_ss.get("other_sales", 0)
             await sales_summaries_col.update_one({"_id": existing_ss["_id"]}, {"$set": summary_payload})
+            ss_id = existing_ss["_id"]
         else:
-            await sales_summaries_col.insert_one(summary_payload)
+            ins = await sales_summaries_col.insert_one(summary_payload)
+            ss_id = ins.inserted_id
+        # Auto-post journal for this sales summary
+        try:
+            from utils.posting_service import post_sales_summary_journal
+            ss_full = await sales_summaries_col.find_one({"_id": ss_id})
+            if ss_full:
+                # If updated, force repost to reflect new totals
+                await post_sales_summary_journal(ss_full, current_user["id"], force=bool(existing_ss))
+        except Exception as e:
+            print(f"Auto-journal sales_summary (cashier) error: {e}")
     except Exception as e:
         print(f"Warning: failed to create sales summary: {e}")
 

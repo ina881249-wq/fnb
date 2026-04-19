@@ -1,6 +1,42 @@
 [
   {
-    "content": "Tier 1 ALL COMPLETE — WebSocket Kitchen + Printer/Drawer + Pagination-ready backend",
+    "content": "Explore existing reports_router.py & journals schema to plan refactor",
     "status": "completed"
+  },
+  {
+    "content": "Update plan.md with Tier 2 phase & decisions",
+    "status": "completed"
+  },
+  {
+    "content": "T2.1a: Extend posting_service.py (sales/petty/cash_movement auto-journals)",
+    "status": "completed"
+  },
+  {
+    "content": "T2.1b: Build backfill endpoint to post journals for historical ops data",
+    "status": "completed"
+  },
+  {
+    "content": "T2.1c: Refactor reports_router: journal-driven P&L",
+    "status": "completed"
+  },
+  {
+    "content": "T2.1d: Journal-driven Cashflow Statement endpoint",
+    "status": "completed"
+  },
+  {
+    "content": "T2.1e: Journal-driven Balance Sheet endpoint",
+    "status": "completed"
+  },
+  {
+    "content": "T2.1f: Trial Balance + General Ledger endpoints",
+    "status": "completed"
+  },
+  {
+    "content": "T2.1g: Update ReportsPage frontend with date filter, journal-driven badge, TB tab, BS breakdown, backfill button",
+    "status": "completed"
+  },
+  {
+    "content": "T2.1h: Test journal-driven reports E2E via testing agent",
+    "status": "in_progress"
   }
 ]

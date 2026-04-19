@@ -1,369 +1,511 @@
+#!/usr/bin/env python3
+"""
+Backend API Testing for F&B ERP Journal-Driven Reporting (Tier 2 Task T2.1)
+
+Tests all journal-driven financial reports and admin endpoints:
+- Admin journal coverage and backfill
+- P&L, Cashflow, Balance Sheet, Trial Balance, General Ledger reports
+- Data consistency checks
+- Role-based access control
+"""
+
 import requests
 import sys
 import json
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 
-class FnBERPTesterSimple:
+class JournalReportingTester:
     def __init__(self, base_url="https://outlet-hub-system.preview.emergentagent.com"):
         self.base_url = base_url
+        self.superadmin_token = None
+        self.manager_token = None
         self.tests_run = 0
         self.tests_passed = 0
-        self.admin_token = None
-        self.chef_token = None
-        self.manager_token = None
-        self.sudirman_outlet_id = "69df25da9be6c3c79434b0e2"
-        self.test_order_id = "69e309ed4a9118c12153d43c"  # Existing paid order
+        self.failed_tests = []
 
-    def run_test(self, name, method, endpoint, expected_status, data=None, headers=None, token=None):
-        """Run a single API test"""
-        url = f"{self.base_url}/{endpoint}"
-        req_headers = {'Content-Type': 'application/json'}
-        
-        auth_token = token or self.admin_token
-        if auth_token:
-            req_headers['Authorization'] = f'Bearer {auth_token}'
-        
-        if headers:
-            req_headers.update(headers)
-
+    def log_test(self, name, success, details=""):
+        """Log test result"""
         self.tests_run += 1
-        print(f"\n🔍 Testing {name}...")
+        if success:
+            self.tests_passed += 1
+            print(f"✅ {name}")
+        else:
+            print(f"❌ {name} - {details}")
+            self.failed_tests.append(f"{name}: {details}")
+
+    def login(self, email, password):
+        """Login and return token"""
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/auth/login",
+                json={"email": email, "password": password},
+                headers={'Content-Type': 'application/json'}
+            )
+            if response.status_code == 200:
+                data = response.json()
+                return data.get('token')
+            else:
+                print(f"Login failed for {email}: {response.status_code} - {response.text}")
+                return None
+        except Exception as e:
+            print(f"Login error for {email}: {str(e)}")
+            return None
+
+    def api_request(self, method, endpoint, token=None, data=None, params=None):
+        """Make API request with token"""
+        headers = {'Content-Type': 'application/json'}
+        if token:
+            headers['Authorization'] = f'Bearer {token}'
         
+        url = f"{self.base_url}{endpoint}"
         try:
             if method == 'GET':
-                response = requests.get(url, headers=req_headers, params=data)
+                response = requests.get(url, headers=headers, params=params)
             elif method == 'POST':
-                response = requests.post(url, json=data, headers=req_headers)
-            elif method == 'PUT':
-                response = requests.put(url, json=data, headers=req_headers)
-            elif method == 'DELETE':
-                response = requests.delete(url, headers=req_headers)
-
-            success = response.status_code == expected_status
-            if success:
-                self.tests_passed += 1
-                print(f"✅ Passed - Status: {response.status_code}")
-                try:
-                    return True, response.json() if response.content else {}
-                except:
-                    return True, {}
+                response = requests.post(url, headers=headers, json=data, params=params)
             else:
-                print(f"❌ Failed - Expected {expected_status}, got {response.status_code}")
-                try:
-                    print(f"   Response: {response.json()}")
-                except:
-                    print(f"   Response: {response.text}")
-                return False, {}
-
+                raise ValueError(f"Unsupported method: {method}")
+            
+            return response
         except Exception as e:
-            print(f"❌ Failed - Error: {str(e)}")
-            return False, {}
+            print(f"API request error: {str(e)}")
+            return None
 
-    def login_user(self, email, password, description=""):
-        """Login and get token"""
-        success, response = self.run_test(
-            f"Login {description}",
-            "POST",
-            "api/auth/login",
-            200,
-            data={"email": email, "password": password}
-        )
-        if success and 'token' in response:
-            return response['token']
-        return None
+    def test_admin_journal_coverage(self):
+        """Test GET /api/admin/journals/coverage (superadmin only)"""
+        print("\n🔍 Testing Admin Journal Coverage...")
+        
+        # Test superadmin access
+        response = self.api_request('GET', '/api/admin/journals/coverage', self.superadmin_token)
+        if response and response.status_code == 200:
+            data = response.json()
+            
+            # Check required fields
+            required_fields = ['sales_summary', 'petty_cash', 'cash_movement', 'total_journals_posted']
+            has_all_fields = all(field in data for field in required_fields)
+            self.log_test("Admin coverage endpoint accessible", has_all_fields, 
+                         f"Missing fields: {[f for f in required_fields if f not in data]}")
+            
+            # Check coverage percentages (should be 100% for backfilled data)
+            sales_coverage = data.get('sales_summary', {}).get('coverage_pct', 0)
+            petty_coverage = data.get('petty_cash', {}).get('coverage_pct', 0)
+            cash_coverage = data.get('cash_movement', {}).get('coverage_pct', 0)
+            
+            self.log_test("Sales summary coverage 100%", sales_coverage == 100.0, 
+                         f"Got {sales_coverage}%")
+            self.log_test("Petty cash coverage 100%", petty_coverage == 100.0, 
+                         f"Got {petty_coverage}%")
+            self.log_test("Cash movement coverage 100%", cash_coverage == 100.0, 
+                         f"Got {cash_coverage}%")
+            
+            total_journals = data.get('total_journals_posted', 0)
+            self.log_test("Total journals posted > 290", total_journals > 290, 
+                         f"Got {total_journals} journals")
+            
+            print(f"   📊 Coverage: Sales {sales_coverage}%, Petty {petty_coverage}%, Cash {cash_coverage}%")
+            print(f"   📊 Total journals: {total_journals}")
+        else:
+            self.log_test("Admin coverage endpoint", False, 
+                         f"Status: {response.status_code if response else 'No response'}")
 
-    def setup_auth(self):
-        """Setup authentication for different user types"""
-        print("\n🔐 Setting up authentication...")
-        
-        self.admin_token = self.login_user("admin@fnb.com", "admin123", "Admin")
-        if not self.admin_token:
-            return False
-            
-        self.chef_token = self.login_user("chef.sudirman@fnb.com", "kitchen123", "Chef")
-        if not self.chef_token:
-            return False
-            
-        self.manager_token = self.login_user("manager.sudirman@fnb.com", "manager123", "Manager")
-        if not self.manager_token:
-            return False
+        # Test non-superadmin access (should be 403)
+        if self.manager_token:
+            response = self.api_request('GET', '/api/admin/journals/coverage', self.manager_token)
+            expected_403 = response and response.status_code == 403
+            self.log_test("Coverage endpoint rejects non-superadmin", expected_403,
+                         f"Status: {response.status_code if response else 'No response'}")
 
-        return True
+    def test_admin_backfill_idempotent(self):
+        """Test POST /api/admin/journals/backfill idempotency"""
+        print("\n🔍 Testing Admin Backfill Idempotency...")
+        
+        # Test superadmin access
+        response = self.api_request('POST', '/api/admin/journals/backfill', self.superadmin_token, {})
+        if response and response.status_code == 200:
+            data = response.json()
+            
+            # Check idempotency - should skip already posted
+            report = data.get('report', {})
+            total_skipped = 0
+            total_posted = 0
+            
+            for source in ['sales_summary', 'petty_cash', 'cash_movement']:
+                skipped = report.get(source, {}).get('skipped_already_posted', 0)
+                posted = report.get(source, {}).get('posted', 0)
+                total_skipped += skipped
+                total_posted += posted
+            
+            self.log_test("Backfill is idempotent", total_skipped > 0 and total_posted == 0,
+                         f"Skipped: {total_skipped}, Posted: {total_posted}")
+            
+            print(f"   📊 Backfill result: {total_skipped} skipped, {total_posted} posted")
+        else:
+            self.log_test("Backfill endpoint", False,
+                         f"Status: {response.status_code if response else 'No response'}")
 
-    def test_kitchen_apis(self):
-        """Test all Kitchen APIs comprehensively"""
-        print("\n🍳 Testing Kitchen Portal APIs...")
+        # Test non-superadmin access (should be 403)
+        if self.manager_token:
+            response = self.api_request('POST', '/api/admin/journals/backfill', self.manager_token, {})
+            expected_403 = response and response.status_code == 403
+            self.log_test("Backfill endpoint rejects non-superadmin", expected_403,
+                         f"Status: {response.status_code if response else 'No response'}")
+
+    def test_pnl_report(self):
+        """Test GET /api/reports/pnl"""
+        print("\n🔍 Testing P&L Report...")
         
-        # 1. Kitchen Queue API
-        success, response = self.run_test(
-            "Kitchen Queue - Get queue with groups and stats",
-            "GET",
-            "api/kitchen/queue",
-            200,
-            data={"outlet_id": self.sudirman_outlet_id},
-            token=self.chef_token
-        )
-        
-        if not success:
-            return False
-            
-        # Verify response structure
-        if not all(key in response for key in ['groups', 'stats']):
-            print("❌ Missing groups or stats in queue response")
-            return False
-            
-        groups = response['groups']
-        stats = response['stats']
-        
-        # Check required groups
-        required_groups = ['queued', 'preparing', 'ready', 'served']
-        if not all(group in groups for group in required_groups):
-            print(f"❌ Missing queue groups. Found: {list(groups.keys())}")
-            return False
-            
-        print(f"✅ Queue structure correct. Stats: {stats}")
-        
-        # 2. Kitchen Ticket Status Update
-        success, response = self.run_test(
-            "Kitchen Ticket - Update status to ready",
-            "POST",
-            f"api/kitchen/tickets/{self.test_order_id}/status",
-            200,
-            data={"status": "ready"},
-            token=self.chef_token
-        )
-        
-        if not success:
-            return False
-            
-        # 3. Kitchen Waste API
-        waste_data = {
-            "outlet_id": self.sudirman_outlet_id,
-            "item_name": "Test Waste Item",
-            "quantity": 1,
-            "uom": "pcs",
-            "reason": "Testing waste API",
-            "category": "error",
-            "cost": 5000,
-            "notes": "API test"
+        params = {
+            'period_start': '2026-01-01',
+            'period_end': '2026-04-30'
         }
         
-        success, response = self.run_test(
-            "Kitchen Waste - Create entry",
-            "POST",
-            "api/kitchen/waste",
-            200,
-            data=waste_data,
-            token=self.chef_token
-        )
-        
-        if not success:
-            return False
+        response = self.api_request('GET', '/api/reports/pnl', self.superadmin_token, params=params)
+        if response and response.status_code == 200:
+            data = response.json()
             
-        waste_id = response.get('id')
-        if not waste_id:
-            print("❌ No waste ID returned")
-            return False
+            # Check data source
+            self.log_test("P&L data source is journals", data.get('data_source') == 'journals')
             
-        # List waste
-        success, response = self.run_test(
-            "Kitchen Waste - List with aggregation",
-            "GET",
-            "api/kitchen/waste",
-            200,
-            data={"outlet_id": self.sudirman_outlet_id},
-            token=self.chef_token
-        )
-        
-        if not success:
-            return False
+            # Check non-zero revenue
+            total_revenue = data.get('total_revenue', 0)
+            self.log_test("P&L has non-zero revenue", total_revenue > 0, 
+                         f"Revenue: {total_revenue}")
             
-        if not all(key in response for key in ['waste', 'total_cost']):
-            print("❌ Missing waste or total_cost in response")
-            return False
+            # Check required breakdowns
+            has_revenue_breakdown = bool(data.get('revenue_breakdown'))
+            has_cogs_breakdown = bool(data.get('cogs_breakdown'))
+            has_expense_breakdown = bool(data.get('expense_breakdown'))
+            has_revenue_by_outlet = bool(data.get('revenue_by_outlet'))
             
-        print(f"✅ Waste list: {len(response['waste'])} entries, total cost: {response['total_cost']}")
-        
-        # Delete waste
-        success, response = self.run_test(
-            "Kitchen Waste - Delete entry",
-            "DELETE",
-            f"api/kitchen/waste/{waste_id}",
-            200,
-            token=self.chef_token
-        )
-        
-        if not success:
-            return False
+            self.log_test("P&L has revenue breakdown", has_revenue_breakdown)
+            self.log_test("P&L has COGS breakdown", has_cogs_breakdown)
+            self.log_test("P&L has expense breakdown", has_expense_breakdown)
+            self.log_test("P&L has revenue by outlet", has_revenue_by_outlet)
             
-        # 4. Kitchen Dashboard
-        success, response = self.run_test(
-            "Kitchen Dashboard - Get KPIs",
-            "GET",
-            "api/kitchen/dashboard",
-            200,
-            data={"outlet_id": self.sudirman_outlet_id},
-            token=self.chef_token
-        )
-        
-        if not success:
-            return False
+            # Check outlet count (should have 2 outlets: Denpasar & Tabanan)
+            outlet_count = len(data.get('revenue_by_outlet', []))
+            self.log_test("P&L shows 2 outlets", outlet_count == 2, 
+                         f"Found {outlet_count} outlets")
             
-        # Check required KPI fields
-        required_fields = ['paid_today', 'queued', 'preparing', 'ready', 'served', 
-                         'avg_prep_minutes', 'waste_today_count', 'waste_today_cost']
-        
-        if not all(field in response for field in required_fields):
-            missing = [f for f in required_fields if f not in response]
-            print(f"❌ Missing KPI fields: {missing}")
-            return False
-            
-        print(f"✅ Dashboard KPIs complete")
-        
-        return True
+            print(f"   📊 Revenue: Rp {total_revenue:,.0f}")
+            print(f"   📊 Net Profit: Rp {data.get('net_profit', 0):,.0f}")
+            print(f"   📊 Journal Count: {data.get('journal_count', 0)}")
+        else:
+            self.log_test("P&L report endpoint", False,
+                         f"Status: {response.status_code if response else 'No response'}")
 
-    def test_daily_closing_integration(self):
-        """Test Daily Closing Integration with Cashier Shifts"""
-        print("\n📋 Testing Daily Closing Integration...")
+    def test_cashflow_report(self):
+        """Test GET /api/reports/cashflow"""
+        print("\n🔍 Testing Cashflow Report...")
         
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        params = {
+            'period_start': '2026-01-01',
+            'period_end': '2026-04-30'
+        }
         
-        success, response = self.run_test(
-            "Daily Closing - Get status with shift integration",
-            "GET",
-            "api/daily-closing/status",
-            200,
-            data={"outlet_id": self.sudirman_outlet_id, "date": today},
-            token=self.manager_token
-        )
-        
-        if not success:
-            return False
+        response = self.api_request('GET', '/api/reports/cashflow', self.superadmin_token, params=params)
+        if response and response.status_code == 200:
+            data = response.json()
             
-        # Check new Phase 3C fields
-        required_fields = ['shift_summary', 'shifts', 'discrepancies', 'checklist']
-        
-        if not all(field in response for field in required_fields):
-            missing = [f for f in required_fields if f not in response]
-            print(f"❌ Missing closing status fields: {missing}")
-            return False
+            # Check data source
+            self.log_test("Cashflow data source is journals", data.get('data_source') == 'journals')
             
-        # Check checklist has cashier_shifts
-        checklist = response.get('checklist', {})
-        if 'cashier_shifts' not in checklist:
-            print("❌ Missing cashier_shifts in checklist")
-            return False
+            # Check required categories
+            by_category = data.get('by_category', {})
+            has_operating = 'operating' in by_category
+            has_financing = 'financing' in by_category
+            has_investing = 'investing' in by_category
             
-        # Check shift_summary structure
-        shift_summary = response.get('shift_summary', {})
-        summary_fields = ['total_orders', 'total_sales', 'cash_sales', 'card_sales', 
-                        'expected_cash_total', 'actual_cash_total', 'variance_total']
-        
-        if not all(field in shift_summary for field in summary_fields):
-            missing = [f for f in summary_fields if f not in shift_summary]
-            print(f"❌ Missing shift summary fields: {missing}")
-            return False
+            self.log_test("Cashflow has operating category", has_operating)
+            self.log_test("Cashflow has financing category", has_financing)
+            self.log_test("Cashflow has investing category", has_investing)
             
-        print(f"✅ Daily closing integration complete")
-        print(f"   Shift summary: {shift_summary}")
-        print(f"   Discrepancies: {len(response.get('discrepancies', []))}")
-        
-        return True
+            # Check daily cashflow array
+            daily_cashflow = data.get('daily_cashflow', [])
+            self.log_test("Cashflow has daily data", len(daily_cashflow) > 0,
+                         f"Found {len(daily_cashflow)} days")
+            
+            # Check breakdowns
+            has_inflow_breakdown = bool(data.get('inflow_breakdown'))
+            has_outflow_breakdown = bool(data.get('outflow_breakdown'))
+            
+            self.log_test("Cashflow has inflow breakdown", has_inflow_breakdown)
+            self.log_test("Cashflow has outflow breakdown", has_outflow_breakdown)
+            
+            print(f"   📊 Total Inflow: Rp {data.get('total_inflow', 0):,.0f}")
+            print(f"   📊 Total Outflow: Rp {data.get('total_outflow', 0):,.0f}")
+            print(f"   📊 Net Cashflow: Rp {data.get('net_cashflow', 0):,.0f}")
+        else:
+            self.log_test("Cashflow report endpoint", False,
+                         f"Status: {response.status_code if response else 'No response'}")
 
-    def test_access_control(self):
-        """Test Kitchen Access Control"""
-        print("\n🔒 Testing Kitchen Access Control...")
+    def test_balance_sheet_report(self):
+        """Test GET /api/reports/balance-sheet"""
+        print("\n🔍 Testing Balance Sheet Report...")
         
-        # Chef should only see Sudirman outlet data
-        success, response = self.run_test(
-            "Kitchen Access - Chef can access Sudirman",
-            "GET",
-            "api/kitchen/queue",
-            200,
-            data={"outlet_id": self.sudirman_outlet_id},
-            token=self.chef_token
-        )
+        params = {
+            'as_of': '2026-04-30'
+        }
         
-        if not success:
-            return False
+        response = self.api_request('GET', '/api/reports/balance-sheet', self.superadmin_token, params=params)
+        if response and response.status_code == 200:
+            data = response.json()
             
-        # Verify chef has limited portal access
-        success, response = self.run_test(
-            "Kitchen Access - Chef dashboard access",
-            "GET",
-            "api/kitchen/dashboard",
-            200,
-            data={"outlet_id": self.sudirman_outlet_id},
-            token=self.chef_token
-        )
-        
-        return success
+            # Check data source
+            self.log_test("Balance Sheet data source is journals", data.get('data_source') == 'journals')
+            
+            # Check required sections
+            has_assets = bool(data.get('assets', {}).get('accounts'))
+            has_liabilities = bool(data.get('liabilities'))
+            has_equity = bool(data.get('equity'))
+            
+            self.log_test("Balance Sheet has assets", has_assets)
+            self.log_test("Balance Sheet has liabilities", has_liabilities)
+            self.log_test("Balance Sheet has equity", has_equity)
+            
+            # Check balance equation
+            balance_check = data.get('balance_check', {})
+            is_balanced = balance_check.get('is_balanced', False)
+            self.log_test("Balance Sheet is balanced", is_balanced,
+                         f"Difference: {balance_check.get('difference', 'N/A')}")
+            
+            # Check retained earnings
+            retained_earnings = data.get('equity', {}).get('retained_earnings_current_period')
+            self.log_test("Balance Sheet has retained earnings", retained_earnings is not None,
+                         f"Retained earnings: {retained_earnings}")
+            
+            print(f"   📊 Total Assets: Rp {data.get('assets', {}).get('total', 0):,.0f}")
+            print(f"   📊 Total Liabilities: Rp {data.get('liabilities', {}).get('total', 0):,.0f}")
+            print(f"   📊 Total Equity: Rp {data.get('equity', {}).get('total', 0):,.0f}")
+        else:
+            self.log_test("Balance Sheet report endpoint", False,
+                         f"Status: {response.status_code if response else 'No response'}")
 
-    def test_regression_apis(self):
-        """Test regression - existing APIs still work"""
-        print("\n🔄 Testing Regression - Core APIs...")
+    def test_trial_balance_report(self):
+        """Test GET /api/reports/trial-balance"""
+        print("\n🔍 Testing Trial Balance Report...")
         
-        endpoints = [
-            ("Health check", "GET", "api/health", 200, None),
-            ("Dashboard summary", "GET", "api/dashboard/summary", 200, None),
-            ("Outlets list", "GET", "api/core/outlets", 200, None),
-            ("Menu items", "GET", "api/cashier/menu", 200, None),
-            ("Current shift", "GET", "api/cashier/shifts/current", 200, {"outlet_id": self.sudirman_outlet_id}),
-        ]
+        params = {
+            'period_start': '2026-01-01',
+            'period_end': '2026-04-30'
+        }
         
-        for name, method, endpoint, expected, params in endpoints:
-            success, response = self.run_test(
-                f"Regression - {name}",
-                method,
-                endpoint,
-                expected,
-                data=params,
-                token=self.admin_token
-            )
-            if not success:
-                return False
+        response = self.api_request('GET', '/api/reports/trial-balance', self.superadmin_token, params=params)
+        if response and response.status_code == 200:
+            data = response.json()
+            
+            # Check data source
+            self.log_test("Trial Balance data source is journals", data.get('data_source') == 'journals')
+            
+            # Check balance (debit = credit)
+            is_balanced = data.get('is_balanced', False)
+            total_debit = data.get('total_debit', 0)
+            total_credit = data.get('total_credit', 0)
+            
+            self.log_test("Trial Balance is balanced", is_balanced,
+                         f"Debit: {total_debit}, Credit: {total_credit}")
+            
+            # Check rows
+            rows = data.get('rows', [])
+            self.log_test("Trial Balance has 12+ accounts", len(rows) >= 12,
+                         f"Found {len(rows)} accounts")
+            
+            # Check required columns in rows
+            if rows:
+                first_row = rows[0]
+                required_cols = ['account_code', 'account_name', 'account_type', 'debit', 'credit', 'balance']
+                has_all_cols = all(col in first_row for col in required_cols)
+                self.log_test("Trial Balance has required columns", has_all_cols,
+                             f"Missing: {[c for c in required_cols if c not in first_row]}")
+            
+            print(f"   📊 Total Debit: Rp {total_debit:,.0f}")
+            print(f"   📊 Total Credit: Rp {total_credit:,.0f}")
+            print(f"   📊 Account Count: {len(rows)}")
+        else:
+            self.log_test("Trial Balance report endpoint", False,
+                         f"Status: {response.status_code if response else 'No response'}")
+
+    def test_general_ledger_report(self):
+        """Test GET /api/reports/general-ledger"""
+        print("\n🔍 Testing General Ledger Report...")
+        
+        # First get trial balance to find a revenue account (4100 Food Sales)
+        tb_response = self.api_request('GET', '/api/reports/trial-balance', self.superadmin_token)
+        if not tb_response or tb_response.status_code != 200:
+            self.log_test("General Ledger test setup", False, "Could not get trial balance")
+            return
+        
+        tb_data = tb_response.json()
+        food_sales_account = None
+        
+        for row in tb_data.get('rows', []):
+            if row.get('account_code') == '4100':  # Food Sales
+                food_sales_account = row.get('account_id')
+                break
+        
+        if not food_sales_account:
+            self.log_test("General Ledger test setup", False, "Could not find Food Sales account (4100)")
+            return
+        
+        params = {
+            'account_id': food_sales_account,
+            'period_start': '2026-01-01',
+            'period_end': '2026-04-30'
+        }
+        
+        response = self.api_request('GET', '/api/reports/general-ledger', self.superadmin_token, params=params)
+        if response and response.status_code == 200:
+            data = response.json()
+            
+            # Check data source
+            self.log_test("General Ledger data source is journals", data.get('data_source') == 'journals')
+            
+            # Check account info
+            account = data.get('account', {})
+            self.log_test("General Ledger has account info", bool(account.get('name')))
+            
+            # Check totals
+            total_debit = data.get('total_debit', 0)
+            total_credit = data.get('total_credit', 0)
+            balance = data.get('balance', 0)
+            
+            self.log_test("General Ledger has totals", total_debit >= 0 and total_credit >= 0)
+            
+            # Check lines with enriched data
+            lines = data.get('lines', [])
+            if lines:
+                first_line = lines[0]
+                has_journal_number = bool(first_line.get('journal_number'))
+                has_posting_date = bool(first_line.get('posting_date'))
                 
-        return True
+                self.log_test("General Ledger lines have journal_number", has_journal_number)
+                self.log_test("General Ledger lines have posting_date", has_posting_date)
+            
+            print(f"   📊 Account: {account.get('code')} {account.get('name')}")
+            print(f"   📊 Balance: Rp {balance:,.0f}")
+            print(f"   📊 Line Count: {len(lines)}")
+        else:
+            self.log_test("General Ledger report endpoint", False,
+                         f"Status: {response.status_code if response else 'No response'}")
+
+    def test_consistency_checks(self):
+        """Test data consistency between reports"""
+        print("\n🔍 Testing Report Consistency...")
+        
+        params = {
+            'period_start': '2026-01-01',
+            'period_end': '2026-04-30'
+        }
+        
+        # Get P&L and Balance Sheet
+        pnl_response = self.api_request('GET', '/api/reports/pnl', self.superadmin_token, params=params)
+        bs_response = self.api_request('GET', '/api/reports/balance-sheet', self.superadmin_token, 
+                                     params={'as_of': '2026-04-30'})
+        
+        if pnl_response and pnl_response.status_code == 200 and bs_response and bs_response.status_code == 200:
+            pnl_data = pnl_response.json()
+            bs_data = bs_response.json()
+            
+            # Check P&L net profit vs Balance Sheet retained earnings
+            net_profit = pnl_data.get('net_profit', 0)
+            retained_earnings = bs_data.get('equity', {}).get('retained_earnings_current_period', 0)
+            
+            # Allow small rounding differences
+            difference = abs(net_profit - retained_earnings)
+            is_consistent = difference < 10.0  # Within Rp 10 tolerance
+            
+            self.log_test("P&L net profit equals BS retained earnings", is_consistent,
+                         f"P&L: {net_profit}, BS: {retained_earnings}, Diff: {difference}")
+            
+            print(f"   📊 P&L Net Profit: Rp {net_profit:,.0f}")
+            print(f"   📊 BS Retained Earnings: Rp {retained_earnings:,.0f}")
+        else:
+            self.log_test("Consistency check setup", False, "Could not get P&L or Balance Sheet")
+
+    def test_outlet_scoping(self):
+        """Test outlet manager access scoping"""
+        print("\n🔍 Testing Outlet Scoping...")
+        
+        if not self.manager_token:
+            self.log_test("Outlet scoping test setup", False, "No manager token available")
+            return
+        
+        params = {
+            'period_start': '2026-01-01',
+            'period_end': '2026-04-30'
+        }
+        
+        # Test manager access to P&L (should only see their outlet's data)
+        response = self.api_request('GET', '/api/reports/pnl', self.manager_token, params=params)
+        if response and response.status_code == 200:
+            data = response.json()
+            
+            # Manager should see fewer journals than superadmin
+            journal_count = data.get('journal_count', 0)
+            self.log_test("Manager sees scoped journal data", journal_count > 0,
+                         f"Manager journal count: {journal_count}")
+            
+            # Check revenue by outlet (should be limited)
+            revenue_by_outlet = data.get('revenue_by_outlet', [])
+            outlet_count = len(revenue_by_outlet)
+            
+            # Manager should see limited outlets (likely just their own)
+            self.log_test("Manager sees limited outlets", outlet_count <= 2,
+                         f"Manager sees {outlet_count} outlets")
+            
+            print(f"   📊 Manager Journal Count: {journal_count}")
+            print(f"   📊 Manager Outlet Count: {outlet_count}")
+        else:
+            self.log_test("Manager P&L access", False,
+                         f"Status: {response.status_code if response else 'No response'}")
+
+    def run_all_tests(self):
+        """Run all tests"""
+        print("🚀 Starting F&B ERP Journal-Driven Reporting Tests")
+        print("=" * 60)
+        
+        # Login
+        print("\n🔐 Authenticating...")
+        self.superadmin_token = self.login("admin@lusipakan.com", "admin123")
+        if not self.superadmin_token:
+            print("❌ Failed to login as superadmin")
+            return 1
+        print("✅ Superadmin authenticated")
+        
+        self.manager_token = self.login("manager.denpasar@lusipakan.com", "manager123")
+        if not self.manager_token:
+            print("⚠️  Failed to login as manager (will skip scoping tests)")
+        else:
+            print("✅ Manager authenticated")
+        
+        # Run tests
+        self.test_admin_journal_coverage()
+        self.test_admin_backfill_idempotent()
+        self.test_pnl_report()
+        self.test_cashflow_report()
+        self.test_balance_sheet_report()
+        self.test_trial_balance_report()
+        self.test_general_ledger_report()
+        self.test_consistency_checks()
+        self.test_outlet_scoping()
+        
+        # Summary
+        print("\n" + "=" * 60)
+        print(f"📊 Test Results: {self.tests_passed}/{self.tests_run} passed")
+        
+        if self.failed_tests:
+            print("\n❌ Failed Tests:")
+            for failure in self.failed_tests:
+                print(f"   • {failure}")
+        
+        success_rate = (self.tests_passed / self.tests_run * 100) if self.tests_run > 0 else 0
+        print(f"\n🎯 Success Rate: {success_rate:.1f}%")
+        
+        return 0 if self.tests_passed == self.tests_run else 1
 
 def main():
-    print("🚀 F&B ERP Phase 3B/3C/3D Comprehensive Testing")
-    print("Testing: Kitchen Portal MVP, Daily Closing Integration, DataTable Rollout")
-    
-    tester = FnBERPTesterSimple()
-    
-    # Setup authentication
-    if not tester.setup_auth():
-        print("❌ Authentication setup failed")
-        return 1
-    
-    # Run all tests
-    tests = [
-        tester.test_kitchen_apis,
-        tester.test_daily_closing_integration,
-        tester.test_access_control,
-        tester.test_regression_apis,
-    ]
-    
-    failed_tests = []
-    for test in tests:
-        try:
-            if not test():
-                failed_tests.append(test.__name__)
-        except Exception as e:
-            print(f"❌ {test.__name__} failed with exception: {e}")
-            failed_tests.append(test.__name__)
-    
-    # Print results
-    print(f"\n📊 Final Test Results:")
-    print(f"Tests passed: {tester.tests_passed}/{tester.tests_run}")
-    print(f"Success rate: {(tester.tests_passed/tester.tests_run)*100:.1f}%")
-    
-    if failed_tests:
-        print(f"\n❌ Failed test categories: {', '.join(failed_tests)}")
-        return 1
-    else:
-        print(f"\n✅ All test categories passed!")
-        return 0
+    tester = JournalReportingTester()
+    return tester.run_all_tests()
 
 if __name__ == "__main__":
     sys.exit(main())

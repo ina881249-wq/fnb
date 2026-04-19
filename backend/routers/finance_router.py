@@ -368,6 +368,16 @@ async def create_sales_summary(req: SalesSummaryRequest, current_user: dict = De
     }
     result = await sales_summaries_col.insert_one(doc)
     await log_audit(current_user["id"], "create", "finance", "sales_summary", str(result.inserted_id), details=f"Sales for {req.date}: {req.total_sales}")
+
+    # Auto-post journal for sales summary (revenue recognition)
+    try:
+        from utils.posting_service import post_sales_summary_journal
+        ss_doc = await sales_summaries_col.find_one({"_id": result.inserted_id})
+        if ss_doc:
+            await post_sales_summary_journal(ss_doc, current_user["id"])
+    except Exception as e:
+        print(f"Auto-journal sales_summary error: {e}")
+
     return {"id": str(result.inserted_id), "message": "Sales summary recorded"}
 
 # ===================== ACCOUNTING PERIODS =====================

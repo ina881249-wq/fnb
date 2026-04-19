@@ -21,7 +21,9 @@
   - **Warehouse transfer governance** (request → approve → ship → receive, partial receive)
   - **KDS mode** untuk dapur (fullscreen kiosk, touch-friendly)
   - **Real-time operations** via WebSocket untuk Kitchen (hapus polling)
-  - **Hardware readiness**: thermal printer ESC/POS + cash drawer (QRIS provider deferred)
+  - **Hardware readiness**: thermal printer ESC/POS + cash drawer
+  - **(Tier 2)** Menjadikan laporan keuangan **journal-driven** sebagai **single source of truth** (P&L, Cashflow, Balance Sheet)
+  - **(Tier 2)** Notification Center lintas portal untuk approvals/alerts/closing/kitchen
 
 > **Current status (updated):**
 > - Baseline Phase 1 & 2: **COMPLETE**
@@ -36,7 +38,7 @@
 > - **Phase 3E Warehouse Portal MVP + integration: COMPLETE**
 > - **Phase 3F AI Executive Portal: COMPLETE**
 > - Data client reseed: **Lusi & Pakan (2 outlet, 3 bulan data) COMPLETE**
-> - **P1a Auto-journal integration: COMPLETE**
+> - **P1a Auto-journal integration: COMPLETE** (receipt/adjustment/waste)
 > - **P1b Auth hardening lanjutan (password policy + invite + sessions): COMPLETE**
 > - **P1c Mobile/tablet-first POS Cashier: COMPLETE**
 > - **P2a 2FA TOTP: COMPLETE**
@@ -44,8 +46,10 @@
 > - **P2e Mobile-first Kitchen KDS: COMPLETE**
 > - **Tier-1 E2 Real-time Kitchen WebSocket: COMPLETE**
 > - **Tier-1 E3 Server-side pagination readiness: COMPLETE (backend-ready; UI wired where needed)**
-> - **Tier-1 E1 Hardware Integration (ESC/POS + cash drawer + print fallback): COMPLETE** *(QRIS gateway deferred pending provider credentials)*
-> - Latest testing: `iteration_4.json` (frontend regression DataTable) — **no critical bugs**
+> - **Tier-1 E1 Hardware Integration (ESC/POS + cash drawer + print fallback): COMPLETE**
+> - **Tier 2 Enhancements: NOT STARTED** (order confirmed: **T2.1 → T2.3 → T2.2**)
+> - Midtrans QRIS: **DEFERRED** sampai API keys production tersedia (tidak di-mock)
+> - Latest testing: `iteration_4.json` — **no critical bugs**
 
 ---
 
@@ -391,23 +395,138 @@ Delivered:
   - Auto open cash drawer on cash payment if paired
 
 Deferred:
-- QRIS payment gateway integration (Midtrans/Xendit/DOKU) — requires provider selection + API keys.
+- QRIS payment gateway integration via **Midtrans** — menunggu API keys production.
 
 Acceptance criteria — Met.
 
 ---
 
+## Tier 2 Enhancements — Control-Grade Finance + Ops Governance (PLANNED; NOT STARTED)
+**User confirmed order:** **T2.1 → T2.3 → T2.2**
+
+### T2.1 (P1) — Journal-Driven Reporting (Full Refactor)
+**Goal:** P&L, Cashflow, Balance Sheet dihitung **100% dari `journals` + `journal_lines`** (status `posted`) sebagai single source of truth.
+
+#### Rationale / Current gap
+- Saat ini `reports_router.py` masih banyak bergantung pada `sales_summaries`, `petty_cash`, `cash_movements` dan valuasi inventory, sementara **jumlah journals posted** masih terbatas (hanya warehouse receipt/adjustment/waste).
+- Agar laporan journal-driven valid, perlu:
+  1) **Auto-journal coverage** untuk transaksi operasional utama (sales, petty cash, settlement/transfer kas, dsb).
+  2) **Backfill** journals untuk data historis seed “Lusi & Pakan” tanpa wipe DB.
+
+#### Scope (confirmed)
+- Refactor trio report:
+  - **Profit & Loss** (Revenue/COGS/Expense/Net Profit)
+  - **Cashflow Statement** (Operating/Investing/Financing bila mapping tersedia; minimal operating cash movement by account mapping)
+  - **Balance Sheet** (Assets/Liabilities/Equity) berdasarkan saldo akun (trial balance → ending balances)
+- Tambahan (supporting):
+  - Trial Balance endpoint (untuk debugging/rekonsiliasi)
+  - General Ledger view per account (drilldown opsional; minimal untuk admin/finance)
+
+#### Implementation steps
+1) **Accounting mapping policy (COA-driven)**
+   - Menggunakan `coa_accounts.account_type` + optional `report_mapping` untuk grouping.
+   - Normal balance: debit for asset/expense/cogs/contra, credit for liability/equity/revenue.
+2) **Expand auto-posting coverage** (via `posting_service.py`)
+   - Sales summary (jika `pos_orders` belum dipakai pada seed) → jurnal pendapatan + kas/piutang.
+   - Petty cash expenses → jurnal beban + petty cash.
+   - Cash movements (settlement deposit) → jurnal perpindahan kas outlet ke bank.
+   - Catatan: mapping akun expense per `petty_cash.category` (default mapping; bisa dikembangkan jadi configurable).
+3) **Backfill jobs (tanpa wipe DB)**
+   - Endpoint/admin action untuk generate journals posted dari data historis (by date range/outlet).
+   - Idempotent: skip bila sudah ada `journals.source_type + source_id` yang sama.
+4) **Refactor `/api/reports/*`**
+   - Implement aggregator berbasis `journal_lines`:
+     - Query posted journals by `posting_date` range + outlet scope.
+     - Aggregate debit/credit by `account_id` lalu join COA untuk type & grouping.
+   - Output tetap kompatibel dengan UI, namun tambah field audit seperti:
+     - `data_source: journals`
+     - `journal_count`, `line_count`, `unmapped_accounts[]` (jika ada)
+5) **Frontend update (Management → ReportsPage.js)**
+   - Tambah filter tanggal (`period_start`, `period_end`) untuk trio report.
+   - Tambah tab/section Trial Balance (untuk finance).
+   - Tambah indicator “Journal-driven” + peringatan bila backfill belum dilakukan.
+6) **Testing & reconciliation**
+   - Uji konsistensi: total revenue/expense vs summary journals.
+   - Spot-check outlet per periode.
+
+#### Acceptance criteria
+- P&L, Cashflow, Balance Sheet dapat dihitung untuk periode apa pun **tanpa membaca `sales_summaries`**.
+- Trial Balance seimbang (total debit ≈ total credit).
+- UI Reports tampil cepat (aggregation indexed; gunakan pipeline + `$group`).
+
+---
+
+### T2.3 (P2) — Notification Center (All sources)
+**Goal:** notifikasi terpusat lintas portal dengan badge unread, dropdown bell, dan deep-link ke objek terkait.
+
+#### Sources (confirmed: semua)
+- Alerts engine (variance/exception)
+- Approvals waiting action user
+- Kitchen ticket events (untuk cashier/manager sesuai role)
+- Closing submission status & hasil approval
+
+#### Implementation steps
+1) Backend:
+   - Collection `notifications` (user_id, outlet_id?, type, title, body, ref_type, ref_id, severity, created_at, read_at)
+   - Endpoint:
+     - `GET /api/notifications?unread_only=&skip=&limit=`
+     - `POST /api/notifications/{id}/read`
+     - `POST /api/notifications/read-all`
+   - Publisher integration:
+     - Emit dari approvals/alerts/closing/kitchen router.
+   - WebSocket push:
+     - Reuse WebSocket manager untuk broadcast ke user channel (atau outlet channel dengan filtering RBAC).
+2) Frontend:
+   - Bell icon di topbar layout (Management/Outlet/Cashier/Kitchen/Warehouse/Executive).
+   - Dropdown list + mark as read.
+   - Routing deep-link (misal ke approvals detail, closing monitor, kitchen queue).
+
+#### Acceptance criteria
+- Notifikasi muncul real-time (WS) dan tetap dapat di-fetch (polling fallback).
+- Badge unread akurat.
+
+---
+
+### T2.2 (P2) — Advanced Warehouse Workflows
+**Goal:** governance receiving & adjustment yang lebih enterprise: PO-based receiving, approval thresholds, attachments.
+
+#### Confirmed decisions
+- Threshold approval: **configurable per outlet** (settings)
+- Attachment storage: **MongoDB GridFS**
+
+#### Scope
+1) PO-based receiving
+   - Collections: `purchase_orders` + `po_lines`
+   - Workflow: draft → submitted → approved → partially_received/received → closed
+   - Receiving dapat refer ke PO (auto fill items + expected qty + price).
+2) Adjustment approval thresholds
+   - Outlet setting: `warehouse.adjustment_approval_threshold`.
+   - Jika nilai adjustment (abs qty * unit_cost) > threshold → wajib approval.
+3) Attachments
+   - Upload foto invoice/DO via GridFS.
+   - Metadata di dokumen receiving/adjustment: file_id, filename, content_type, size.
+
+#### Acceptance criteria
+- Receiving bisa dari PO dan menghitung variance qty/price.
+- Adjustment tidak bisa diposting/berdampak stock tanpa approval jika melewati threshold.
+- Attachment dapat diupload, dilihat, dan didownload.
+
+---
+
 ## 3) Next Actions (immediate)
-1) **Pilot lapangan** dengan thermal printer nyata (58mm/80mm) + cash drawer:
-   - verifikasi pairing Web Serial di Chrome/Edge
+1) **Start Tier 2 sesuai urutan yang disetujui**: T2.1 → T2.3 → T2.2.
+2) Untuk **T2.1**: jalankan **backfill journals** untuk seed “Lusi & Pakan” (by date range) setelah endpoint siap.
+3) Pilot lapangan tetap berjalan:
+   - thermal printer nyata (58mm/80mm) + cash drawer pairing Web Serial di Chrome/Edge
    - test print formatting untuk menu panjang
-   - verifikasi drawer kick wiring
-2) Putuskan **provider QRIS** (Midtrans/Xendit/DOKU) dan siapkan API keys untuk integrasi.
-3) Monitoring performa setelah 2–4 minggu data akumulasi:
+4) Monitoring performa setelah 2–4 minggu data akumulasi:
    - jika stock movements/audit logs > 5k, wire server-side pagination pada halaman yang masih client-side
-4) Optional hardening:
+5) Optional hardening:
    - rate limiting untuk /auth/login
    - encryption-at-rest untuk `totp_secret`
+
+Deferred:
+- **Midtrans QRIS** integration (production mode) — menunggu API keys dari user.
 
 ---
 
@@ -418,18 +537,21 @@ Acceptance criteria — Met.
   - reporting (management/executive)
 - Daily closing end-to-end berjalan sesuai flow:
   - cashier close shift → outlet review → system validate → submit approval → finance finalize/lock.
-- Finance tetap **double-entry**, dan makin journal-driven.
+- Finance tetap **double-entry** dan laporan **journal-driven**:
+  - P&L/Cashflow/Balance Sheet berasal dari `journals` + `journal_lines`
+  - Trial Balance balanced untuk periode/outlet
 - UI operasional-grade:
   - DataTable konsisten, filter/pagination stabil
   - mobile/tablet UX siap lapangan (Cashier POS + Kitchen KDS)
+  - Notification Center membuat approvals/alerts cepat ditindak
 - Executive control tower proaktif dengan AI:
   - briefing otomatis, anomaly detection, forecasting untuk tindakan cepat.
 - **Production readiness**:
-  - Auto-journal untuk receiving/waste/adjustment aktif dan balanced
+  - Auto-journal coverage cukup untuk laporan journal-driven
   - Password policy + invite onboarding + session audit + **2FA** tersedia
   - Warehouse transfers punya governance (request/approve/partial receive)
   - Kitchen real-time via WebSocket (polling hanya fallback)
-  - Hardware printing + cash drawer siap (QRIS integration pending provider)
+  - Hardware printing + cash drawer siap (QRIS integration pending Midtrans keys)
 
 ---
 
