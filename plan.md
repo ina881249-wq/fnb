@@ -8,7 +8,7 @@
   - Kontrol operasional via **reconciliation, daily closing, approvals, alerts**
   - Inventory operasional via **receiving, transfer, adjustment, stock count** + traceability `stock_movements`
 - Upgrade UI menjadi **enterprise operational cockpit**:
-  - DataTable standar (pagination/search/filter/sort) bertahap di semua modul
+  - DataTable standar (pagination/search/filter/sort) di semua modul utama
   - workflow-first screens untuk outlet ops (closing-driven)
   - konsistensi navigasi + tindakan kontekstual
 - Menjadikan **Cashier Portal, Kitchen Portal, Warehouse Portal** sebagai sumber data operasional yang mengalir ke kontrol outlet (closing) dan monitoring (management/executive).
@@ -19,16 +19,17 @@
 > **Current status (updated):**
 > - Baseline Phase 1 & 2: **COMPLETE**
 > - Enhancement Phase 1A/1B/1C: **COMPLETE**
-> - Enhancement Phase 1D: **PARTIALLY COMPLETE** (sisa dipindah ke hardening)
+> - Enhancement Phase 1D: **PARTIALLY COMPLETE** (sisa masuk hardening lanjutan)
 > - **Phase 3A Cashier Portal MVP: COMPLETE**
 > - **Phase 3B Kitchen Portal MVP: COMPLETE**
 > - **Phase 3C Daily Closing Integration: COMPLETE**
 > - **Phase 3D.1 DataTable Rollout (Outlet pages): COMPLETE**
-> - **Phase 3D.2 Auth hardening: COMPLETE** (admin-trigger reset + must change + session timeout via interceptors)
-> - **Phase 3E Warehouse Portal MVP + integration: COMPLETE** (routing aktif, UI terhubung API, E2E receipt posting verified)
-> - **Phase 3F AI Executive Portal: COMPLETE** (Insights + Chat + Forecast + Anomalies; verified via Playwright)
-> - All key portals active: **Executive, Management, Outlet, Cashier, Kitchen, Warehouse**
-> - Latest testing: Warehouse UI verified via Playwright screenshot + backend API smoke tested
+> - **Phase 3D.2 Auth hardening: COMPLETE**
+> - **Phase 3D.3 DataTable Rollout (remaining modules): COMPLETE**
+> - **Phase 3E Warehouse Portal MVP + integration: COMPLETE**
+> - **Phase 3F AI Executive Portal: COMPLETE**
+> - Data client reseed: **Lusi & Pakan (2 outlet, 3 bulan data) COMPLETE**
+> - Latest testing: `iteration_4.json` (frontend regression untuk DataTable rollout) — **no critical bugs**
 
 ---
 
@@ -53,7 +54,7 @@ Exit criteria: Met.
 Delivered baseline product spanning:
 - **Management Portal**: Dashboard, Finance, Inventory, Reports (Excel/PDF export), Admin (users/roles/outlets), Approvals, Audit.
 - **Outlet Portal**: Dashboard, Cash, Sales Summary, Petty Cash, Inventory, Daily Closing.
-- Seed data: 3 outlets + sample accounts/items/sales/cash/petty-cash.
+- Seed data awal: 3 outlets + sample accounts/items/sales/cash/petty-cash.
 
 Hardening fixes applied:
 - `_id` serialization corrected → `id` for frontend consistency
@@ -113,14 +114,12 @@ Goal: make UI enterprise-grade for daily operations.
   - Variance structured layout + empty-state guidance
 - Empty states and CTAs implemented across new modules.
 - Navigation/menu restructure implemented.
+- **DataTable standardization (Phase 3D.1 + 3D.3) selesai** untuk modul utama.
 
-#### Remaining Scope (moved to Phase 3D hardening queue)
-- Server-side pagination (10/20/50) across **all long lists**:
-  - stock movements, audit trail, approvals, items, recipes, production orders, reconciliations, etc.
-- Smart filters + saved views (per role) on key modules.
-- Sort + sticky headers + column visibility for large tables.
-- Bulk actions (approve multiple, resolve alerts, export selected).
-- Global search (command palette) + structured search per module.
+#### Remaining Scope (hardening lanjutan)
+- Server-side pagination untuk dataset besar (stock movements, audit trail, approvals, dsb) bila volume tinggi.
+- Smart filters + saved views (per role) pada modul critical.
+- Sticky headers + column visibility + export selected untuk tabel besar.
 - Reporting refactor milestone:
   - move P&L/Cashflow/Balance Sheet calculations to be **journal-driven** as single source-of-truth.
 
@@ -154,7 +153,7 @@ Acceptance criteria (to close 1D)
 - Portal Selector: Cashier portal **active**
 
 #### Quality / Testing
-- Testing agent: **Backend 29/29 passed**, frontend core flows verified end-to-end.
+- Testing agent: backend passed; frontend core flows verified end-to-end.
 
 Acceptance criteria — Met.
 
@@ -179,8 +178,8 @@ Acceptance criteria — Met.
   - reuse `pos_orders` untuk ticket + kitchen status
   - `waste_logs` untuk pencatatan waste
 - Integration:
-  - Saat POS order dibayar, backend broadcast event `kitchen_ticket_new` (real-time next step)
-  - Waste log (jika item_id ada) membuat `stock_movements` type `waste` (traceability)
+  - Saat POS order dibayar, backend broadcast event `kitchen_ticket_new`
+  - Waste log (jika item_id ada) membuat `stock_movements` type `waste`
 
 #### Frontend (Delivered)
 - Layout: `KitchenLayout.js`
@@ -189,7 +188,7 @@ Acceptance criteria — Met.
 - Portal Selector: Kitchen portal **active** + routing enabled
 
 #### Quality / Testing
-- Verified via Playwright flow (queue update + waste entry) + testing agent regression.
+- Verified via Playwright flow + testing agent regression.
 
 Acceptance criteria — Met.
 
@@ -225,18 +224,12 @@ Acceptance criteria — Met.
 
 ---
 
-### Phase 3D — Hardening (DataTable rollout) (IN PROGRESS)
+### Phase 3D — Hardening (DataTable rollout) (COMPLETE)
 #### Phase 3D.1 — DataTable rollout (Outlet major pages) (COMPLETED)
-Delivered (client-side DataTable standardization):
-- Outlet → **Cash Management** migrated to `DataTable`:
-  - search + filter type + sort + pagination
-- Outlet → **Sales Summary** migrated to `DataTable`:
-  - search + sortable columns + pagination
-- Outlet → **Petty Cash** migrated to `DataTable`:
-  - search + category filter + pagination
-
-Quality:
-- Tested via UI navigation + testing agent.
+Delivered:
+- Outlet → **Cash Management** migrated to `DataTable`
+- Outlet → **Sales Summary** migrated to `DataTable`
+- Outlet → **Petty Cash** migrated to `DataTable`
 
 #### Phase 3D.2 — Auth & Security Hardening (COMPLETED)
 Delivered:
@@ -244,24 +237,24 @@ Delivered:
 - Force change password on next login (`must_change_password`)
 - Session timeout via frontend interceptors + UX messaging
 
+#### Phase 3D.3 — DataTable rollout (remaining modules) (COMPLETED)
+Delivered:
+- Management → **InventoryPage**: 3 tabs (Stock on Hand, Items, Movements) migrated ke `DataTable` dengan search/sort/filter/pagination
+- Management → **JournalEntriesPage**: migrated ke `DataTable` + server-side pagination + status & source filter + row-click detail dialog
+- Management → **ReconciliationPage**: migrated ke `DataTable` + status/type filter + search
+- (Sudah sebelumnya) Management → **ApprovalsPage** dan **AuditTrailPage** sudah pakai `DataTable`
+
+Bundled fix:
+- **DataTable**: fixed client-side pagination bug (Prev/Next bekerja selama `onPageChange` diberikan, tidak lagi tergantung `isServerSide`).
+
+Notes:
+- ProductionPage tetap kanban (lebih optimal untuk workflow status).
+- RecipeBOMPage tetap card grid (lebih optimal untuk browsing resep).
+
+Quality / Testing:
+- Testing agent `iteration_4.json`: tidak ada critical bugs; beberapa finding adalah false positives terkait selector.
+
 Acceptance criteria — Met.
-
-#### Phase 3D.3 — DataTable rollout (remaining modules) (NEXT)
-Scope:
-- Rollout `DataTable` ke list panjang lainnya (Management + Outlet):
-  - Stock Movements
-  - Items
-  - Recipes
-  - Production Orders
-  - Approvals
-  - Audit Trail
-  - Reconciliation
-  - Journal Entries (upgrade ke standard DataTable + filters)
-- (Opsional) migrasi ke server-side pagination untuk dataset besar.
-
-Acceptance criteria:
-- Konsistensi UX tabel di semua modul utama.
-- Query params konsisten untuk pagination/filter (jika server-side diaktifkan).
 
 ---
 
@@ -273,108 +266,60 @@ Scope delivered:
 - Inventory Count (stock opname) + variance posting ke stock movements
 - Warehouse Dashboard (7-day KPIs)
 
-Integration notes (implemented):
+Integration notes:
 - Semua aksi gudang tercermin pada `stock_on_hand` + `stock_movements`.
-- **Frontend line picker** untuk Receiving/Transfers mewajibkan pilihan item dari katalog (menghasilkan `item_id`) karena backend membutuhkan `item_id` untuk stock tracking.
-- Routing & akses portal:
-  - `App.js`: route `/warehouse/*` aktif dan dibungkus `ProtectedRoute`
-  - `PortalSelector.js`: Warehouse portal status **active**
-  - User seed: `warehouse@fnb.com` memiliki `portal_access: ['warehouse']`
-
-Quality / Testing:
-- Playwright: semua sub-page Warehouse berhasil dirender (Dashboard/Receiving/Transfers/Adjustments/Counts)
-- E2E smoke:
-  - Receipt posting berhasil membuat GRN dan KPI dashboard ter-update
+- Frontend line picker untuk Receiving/Transfers mewajibkan pilihan item dari katalog (`item_id`).
+- Routing & akses portal aktif.
 
 Acceptance criteria — Met.
 
 ---
 
 ## Phase 3F — AI Executive Portal (COMPLETE)
-**User priority decision:** kerjakan AI Executive dulu (impact tinggi).
+Delivered Features:
+1) AI Insights (briefing)
+2) AI Chat
+3) AI Forecast
+4) AI Anomalies
 
-### Delivered Features (All completed; verified)
-1) **AI Insights (Auto-narrative Briefing)**
-   - Endpoint: `POST /api/ai/insights`
-   - Output: briefing eksekutif dalam Bahasa Indonesia (sections: Ringkasan Utama, Performa Outlet, Perhatian Khusus, Rekomendasi)
-   - Caching harian via `ai_insights_cache`
-2) **AI Chat Assistant (Q&A berbasis data)**
-   - Endpoints:
-     - `POST /api/ai/chat`
-     - `GET /api/ai/chat/sessions`
-     - `GET /api/ai/chat/sessions/{session_id}`
-     - `DELETE /api/ai/chat/sessions/{session_id}`
-   - Session-based memory per user via `ai_conversations`
-   - Context injection: 30 hari data ringkas (sales, waste, variance, alerts, top items)
-3) **AI Forecasting**
-   - Endpoint: `POST /api/ai/forecast`
-   - Baseline forecast: trend + weekday seasonality (simple, explainable)
-   - AI narration: proyeksi ringkas + pola + implikasi operasional
-4) **AI Anomaly Detection + Explanation**
-   - Endpoint: `POST /api/ai/anomalies`
-   - Anomalies:
-     - revenue spike/drop (z-score)
-     - waste spike (z-score)
-     - cashier variance besar
-     - active alerts summary
-   - AI explanation: interpretasi otomatis + prioritas tindakan + hipotesis akar masalah
-
-### Model / Provider
-- Provider: **Emergent Universal Key**
-- Model default: **Anthropic `claude-sonnet-4-5-20250929`**
-
-### Frontend (Delivered)
-- Executive nav + pages:
-  - `/executive/ai-insights`
-  - `/executive/ai-chat`
-  - `/executive/ai-forecast`
-  - `/executive/ai-anomalies`
-- Verified via Playwright screenshots untuk semua halaman.
-
-### Data Storage
-- Collections:
-  - `ai_conversations` (chat history)
-  - `ai_insights_cache` (cached daily insights)
+Provider:
+- Emergent Universal Key (Claude Sonnet)
 
 Acceptance criteria — Met.
 
 ---
 
 ## 3) Next Actions (immediate)
-1) **Phase 3D.3 — DataTable rollout sisanya (P1)**
-   - prioritas urutan yang disarankan:
-     1) Items
-     2) Stock Movements
-     3) Approvals
-     4) Audit Trail
-     5) Reconciliation
-     6) Journal Entries
-     7) Recipes + Production Orders
-   - target: konsistensi UX tabel + performa stabil
-2) (Opsional) **Server-side pagination** untuk modul yang dataset-nya besar
-   - nyalakan berbasis kebutuhan (mis. stock movements, audit)
-3) (Opsional) **Warehouse advanced workflow** (naik level dari MVP → full workflow)
-   - Transfer workflow resmi: request → approve → ship → receive
-   - (Jika diperlukan) posting jurnal untuk inventory valuation
+1) **P1 — Auto-journal integration (finance ↔ operasional)**
+   - Warehouse Receiving → auto-post jurnal (Dr Inventory / Cr AP)
+   - Waste logs → auto-post jurnal (Dr Waste Expense / Cr Inventory)
+   - Stock Adjustment → auto-post jurnal koreksi
+   - Target: laporan journal-driven + audit trail lebih kuat
+2) **P1 — Auth hardening lanjutan (opsional, jika siap production multi-outlet)**
+   - Password policy, optional 2FA untuk finance/admin
+   - User invite flow
+   - Session activity log
+3) **P1 — Mobile/tablet-first POS Cashier (opsional, untuk pilot lapangan)**
+   - Touch-friendly, responsive layout, keypad input
 
 ---
 
 ## 4) Success Criteria
 - Semua transaksi operasional (POS, cash, petty cash, receiving, transfer, adjustment, stock count, waste) mengalir ke:
-  - approval (bila perlu)
+  - approvals (bila perlu)
   - daily closing (outlet)
   - reporting (management/executive)
-- Daily closing end-to-end berjalan sesuai flow PDF:
+- Daily closing end-to-end berjalan sesuai flow:
   - cashier close shift → outlet review → system validate → submit approval → finance finalize/lock.
 - Finance tetap **double-entry**, dan laporan makin journal-driven.
 - UI operasional-grade: DataTable konsisten, filter/pagination stabil, saved views/bulk actions bertahap.
-- Executive control tower makin proaktif dengan AI:
-  - briefing otomatis, anomaly detection, dan forecasting untuk tindakan cepat.
+- Executive control tower proaktif dengan AI:
+  - briefing otomatis, anomaly detection, forecasting untuk tindakan cepat.
 
 ---
 
 ## Appendix — Current Navigation Snapshot
-### Management Portal (15 items across 6 sections)
+### Management Portal
 - **Executive**: Dashboard, Alerts
 - **Finance**: Chart of Accounts, Journal Entries, Cash & Bank, Reconciliation
 - **Inventory**: Items & Stock, Recipe & BOM, Production Orders
@@ -382,18 +327,18 @@ Acceptance criteria — Met.
 - **Operations**: Closing Monitor, Approvals
 - **Admin**: Admin, Audit Trail
 
-### Outlet Portal (6 tabs)
+### Outlet Portal
 Dashboard, Cash, Sales, Petty Cash, Inventory, Daily Closing
 
-### Cashier Portal (Phase 3A — Delivered)
+### Cashier Portal
 Dashboard, POS, Orders, Shift
 
-### Kitchen Portal (Phase 3B — Delivered)
+### Kitchen Portal
 Dashboard, Queue, Waste
 
-### Warehouse Portal (Phase 3E — Delivered)
+### Warehouse Portal
 Dashboard, Receiving, Transfers, Adjustments, Inventory Count
 
-### Executive Portal (AI — Delivered)
+### Executive Portal
 Overview, Revenue Analytics, Expense Analytics, Outlet Performance, Inventory Health, Control Tower,
-**AI Insights, AI Chat, AI Forecast, AI Anomalies**
+AI Insights, AI Chat, AI Forecast, AI Anomalies

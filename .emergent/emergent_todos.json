@@ -1,38 +1,6 @@
 [
   {
-    "content": "Review DataTable component API & current state of target pages",
+    "content": "Phase 3D.3 DataTable rollout - COMPLETE",
     "status": "completed"
-  },
-  {
-    "content": "Fix DataTable client-side pagination bug (pagination buttons)",
-    "status": "completed"
-  },
-  {
-    "content": "Refactor InventoryPage: Stock + Items + Movements tables to DataTable",
-    "status": "in_progress"
-  },
-  {
-    "content": "Refactor JournalEntriesPage list to DataTable",
-    "status": "pending"
-  },
-  {
-    "content": "Refactor ReconciliationPage list to DataTable",
-    "status": "pending"
-  },
-  {
-    "content": "Skip ProductionPage (kanban is optimal)",
-    "status": "completed"
-  },
-  {
-    "content": "Skip RecipeBOMPage (card grid is optimal)",
-    "status": "completed"
-  },
-  {
-    "content": "Build lint check + screenshot verification",
-    "status": "pending"
-  },
-  {
-    "content": "Update plan.md to mark Phase 3D.3 complete",
-    "status": "pending"
   }
 ]
