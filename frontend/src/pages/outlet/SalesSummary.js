@@ -1,26 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import api from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { useLang } from '../../context/LangContext';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
-import { Badge } from '../../components/ui/badge';
-import { Plus, FileText } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog';
 import { toast } from 'sonner';
+import { DataTable } from '../../components/common/DataTable';
 
 const formatCurrency = (val) => `Rp ${(val || 0).toLocaleString('id-ID')}`;
 
 export default function SalesSummary() {
   const { currentOutlet } = useAuth();
+  const { lang } = useLang();
   const [summaries, setSummaries] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({
     date: new Date().toISOString().split('T')[0],
     total_sales: 0, cash_sales: 0, card_sales: 0, online_sales: 0, notes: '',
   });
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
 
   const fetchData = async () => {
     if (!currentOutlet) return;
@@ -31,6 +34,29 @@ export default function SalesSummary() {
   };
 
   useEffect(() => { fetchData(); }, [currentOutlet]);
+
+  const filteredSummaries = useMemo(() => {
+    return summaries.filter(s => {
+      if (!search) return true;
+      const q = search.toLowerCase();
+      return s.date?.includes(q) || s.notes?.toLowerCase().includes(q);
+    });
+  }, [summaries, search]);
+
+  const columns = [
+    { key: 'date', label: lang === 'id' ? 'Tanggal' : 'Date', sortable: true, width: '120px',
+      render: (v) => <span className="font-medium text-sm">{v}</span> },
+    { key: 'cash_sales', label: lang === 'id' ? 'Tunai' : 'Cash', align: 'right', sortable: true,
+      render: (v) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(v)}</span> },
+    { key: 'card_sales', label: lang === 'id' ? 'Kartu' : 'Card', align: 'right', sortable: true,
+      render: (v) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(v)}</span> },
+    { key: 'online_sales', label: 'Online', align: 'right', sortable: true,
+      render: (v) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(v)}</span> },
+    { key: 'total_sales', label: 'Total', align: 'right', sortable: true,
+      render: (v) => <span className="font-semibold text-[hsl(var(--primary))]" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(v)}</span> },
+    { key: 'notes', label: lang === 'id' ? 'Catatan' : 'Notes',
+      render: (v) => <span className="text-sm text-[hsl(var(--muted-foreground))]">{v || '-'}</span> },
+  ];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -82,28 +108,20 @@ export default function SalesSummary() {
         </Dialog>
       </div>
 
-      <Card className="bg-[var(--glass-bg)] border-[var(--glass-border)]">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader><TableRow className="border-[var(--glass-border)] hover:bg-transparent">
-              <TableHead>Date</TableHead><TableHead className="text-right">Cash</TableHead><TableHead className="text-right">Card</TableHead>
-              <TableHead className="text-right">Online</TableHead><TableHead className="text-right">Total</TableHead><TableHead>Notes</TableHead>
-            </TableRow></TableHeader>
-            <TableBody>
-              {summaries.map((s, i) => (
-                <TableRow key={i} className="border-[var(--glass-border)] hover:bg-white/5">
-                  <TableCell className="font-medium">{s.date}</TableCell>
-                  <TableCell className="text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(s.cash_sales)}</TableCell>
-                  <TableCell className="text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(s.card_sales)}</TableCell>
-                  <TableCell className="text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(s.online_sales)}</TableCell>
-                  <TableCell className="text-right font-semibold" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(s.total_sales)}</TableCell>
-                  <TableCell className="text-sm text-[hsl(var(--muted-foreground))]">{s.notes || '-'}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <DataTable
+        data={filteredSummaries}
+        columns={columns}
+        total={filteredSummaries.length}
+        page={page}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={(s) => { setPageSize(s); setPage(0); }}
+        searchValue={search}
+        onSearchChange={(v) => { setSearch(v); setPage(0); }}
+        searchPlaceholder={lang === 'id' ? 'Cari tanggal atau catatan...' : 'Search date or notes...'}
+        emptyTitle={lang === 'id' ? 'Belum ada ringkasan penjualan' : 'No sales summaries'}
+        emptyDescription={lang === 'id' ? 'Tambahkan ringkasan manual atau tutup shift kasir' : 'Add a summary or close a cashier shift'}
+      />
     </div>
   );
 }

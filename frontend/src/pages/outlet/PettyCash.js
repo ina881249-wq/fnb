@@ -1,25 +1,31 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import api from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { useLang } from '../../context/LangContext';
+import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog';
 import { Badge } from '../../components/ui/badge';
-import { Plus, Receipt } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
+import { DataTable } from '../../components/common/DataTable';
 
 const formatCurrency = (val) => `Rp ${(val || 0).toLocaleString('id-ID')}`;
 
 export default function PettyCash() {
   const { currentOutlet } = useAuth();
+  const { lang } = useLang();
   const [expenses, setExpenses] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ account_id: '', amount: 0, description: '', category: 'operational', receipt_ref: '' });
+  const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
 
   const fetchData = async () => {
     if (!currentOutlet) return;
@@ -48,6 +54,30 @@ export default function PettyCash() {
 
   const totalSpent = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
   const categories = ['operational', 'transport', 'supplies', 'cleaning', 'maintenance', 'other'];
+
+  const filteredExpenses = useMemo(() => {
+    return expenses.filter(e => {
+      if (categoryFilter !== 'all' && e.category !== categoryFilter) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        if (!(e.description?.toLowerCase().includes(q) || e.receipt_ref?.toLowerCase().includes(q) || e.date?.includes(q))) return false;
+      }
+      return true;
+    });
+  }, [expenses, categoryFilter, search]);
+
+  const columns = [
+    { key: 'date', label: lang === 'id' ? 'Tanggal' : 'Date', sortable: true, width: '120px',
+      render: (v) => <span className="text-xs">{v}</span> },
+    { key: 'description', label: lang === 'id' ? 'Deskripsi' : 'Description',
+      render: (v) => v || '-' },
+    { key: 'category', label: lang === 'id' ? 'Kategori' : 'Category', width: '130px',
+      render: (v) => <Badge variant="outline" className="text-[10px] capitalize">{v}</Badge> },
+    { key: 'receipt_ref', label: lang === 'id' ? 'Nota' : 'Receipt', width: '120px',
+      render: (v) => <span className="text-xs text-[hsl(var(--muted-foreground))] font-mono">{v || '-'}</span> },
+    { key: 'amount', label: 'Amount', align: 'right', sortable: true, width: '140px',
+      render: (v) => <span className="font-medium text-red-400" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(v)}</span> },
+  ];
 
   return (
     <div className="space-y-6">
@@ -98,27 +128,23 @@ export default function PettyCash() {
         </Card>
       </div>
 
-      <Card className="bg-[var(--glass-bg)] border-[var(--glass-border)]">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader><TableRow className="border-[var(--glass-border)] hover:bg-transparent">
-              <TableHead>Date</TableHead><TableHead>Description</TableHead><TableHead>Category</TableHead>
-              <TableHead>Receipt</TableHead><TableHead className="text-right">Amount</TableHead>
-            </TableRow></TableHeader>
-            <TableBody>
-              {expenses.map((e, i) => (
-                <TableRow key={i} className="border-[var(--glass-border)] hover:bg-white/5">
-                  <TableCell className="text-sm">{e.date}</TableCell>
-                  <TableCell>{e.description}</TableCell>
-                  <TableCell><Badge variant="outline" className="text-[10px]">{e.category}</Badge></TableCell>
-                  <TableCell className="text-sm text-[hsl(var(--muted-foreground))]">{e.receipt_ref || '-'}</TableCell>
-                  <TableCell className="text-right font-medium text-red-400" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(e.amount)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <DataTable
+        data={filteredExpenses}
+        columns={columns}
+        total={filteredExpenses.length}
+        page={page}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={(s) => { setPageSize(s); setPage(0); }}
+        searchValue={search}
+        onSearchChange={(v) => { setSearch(v); setPage(0); }}
+        searchPlaceholder={lang === 'id' ? 'Cari deskripsi, nota, tanggal...' : 'Search description, receipt, date...'}
+        filters={[
+          { key: 'category', label: lang === 'id' ? 'Kategori' : 'Category', value: categoryFilter, onChange: (v) => { setCategoryFilter(v); setPage(0); }, options: categories.map(c => ({ value: c, label: c.charAt(0).toUpperCase() + c.slice(1) })) },
+        ]}
+        emptyTitle={lang === 'id' ? 'Belum ada pengeluaran' : 'No petty cash expenses'}
+        emptyDescription={lang === 'id' ? 'Tambahkan pengeluaran untuk memulai' : 'Add an expense to start'}
+      />
     </div>
   );
 }

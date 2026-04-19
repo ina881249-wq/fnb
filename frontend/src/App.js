@@ -46,6 +46,10 @@ import CashierDashboard from './pages/cashier/CashierDashboard';
 import POSPage from './pages/cashier/POSPage';
 import OrdersPage from './pages/cashier/OrdersPage';
 import ShiftPage from './pages/cashier/ShiftPage';
+import KitchenLayout from './layouts/KitchenLayout';
+import KitchenDashboard from './pages/kitchen/KitchenDashboard';
+import KitchenQueue from './pages/kitchen/KitchenQueue';
+import KitchenWaste from './pages/kitchen/KitchenWaste';
 import './App.css';
 
 const ProtectedRoute = ({ children }) => {
@@ -132,6 +136,14 @@ function AppRoutes() {
         <Route path="orders" element={<OrdersPage />} />
         <Route path="shift" element={<ShiftPage />} />
         <Route index element={<Navigate to="dashboard" />} />
+      </Route>
+
+      {/* Kitchen Portal */}
+      <Route path="/kitchen" element={<ProtectedRoute><KitchenLayout /></ProtectedRoute>}>
+        <Route path="dashboard" element={<KitchenDashboard />} />
+        <Route path="queue" element={<KitchenQueue />} />
+        <Route path="waste" element={<KitchenWaste />} />
+        <Route index element={<Navigate to="queue" />} />
       </Route>
 
       {/* Coming Soon Portals */}

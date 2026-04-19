@@ -1,542 +1,369 @@
-#!/usr/bin/env python3
-"""
-F&B ERP Backend API Testing Suite
-Tests all major endpoints for the F&B Financial Control Platform
-"""
-
 import requests
 import sys
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
-class FnBERPTester:
+class FnBERPTesterSimple:
     def __init__(self, base_url="https://outlet-hub-system.preview.emergentagent.com"):
         self.base_url = base_url
-        self.token = None
-        self.user_data = None
         self.tests_run = 0
         self.tests_passed = 0
-        self.failed_tests = []
-        self.outlet_ids = []
-        self.account_ids = []
-        self.item_ids = []
+        self.admin_token = None
+        self.chef_token = None
+        self.manager_token = None
+        self.sudirman_outlet_id = "69df25da9be6c3c79434b0e2"
+        self.test_order_id = "69e309ed4a9118c12153d43c"  # Existing paid order
 
-    def log_result(self, test_name, success, details=""):
-        """Log test result"""
+    def run_test(self, name, method, endpoint, expected_status, data=None, headers=None, token=None):
+        """Run a single API test"""
+        url = f"{self.base_url}/{endpoint}"
+        req_headers = {'Content-Type': 'application/json'}
+        
+        auth_token = token or self.admin_token
+        if auth_token:
+            req_headers['Authorization'] = f'Bearer {auth_token}'
+        
+        if headers:
+            req_headers.update(headers)
+
         self.tests_run += 1
-        if success:
-            self.tests_passed += 1
-            print(f"✅ {test_name}")
-        else:
-            print(f"❌ {test_name} - {details}")
-            self.failed_tests.append({"test": test_name, "details": details})
-
-    def make_request(self, method, endpoint, data=None, params=None, expected_status=200):
-        """Make API request with authentication"""
-        url = f"{self.base_url}/api/{endpoint}"
-        headers = {'Content-Type': 'application/json'}
-        if self.token:
-            headers['Authorization'] = f'Bearer {self.token}'
-
+        print(f"\n🔍 Testing {name}...")
+        
         try:
             if method == 'GET':
-                response = requests.get(url, headers=headers, params=params, timeout=10)
+                response = requests.get(url, headers=req_headers, params=data)
             elif method == 'POST':
-                response = requests.post(url, json=data, headers=headers, params=params, timeout=10)
+                response = requests.post(url, json=data, headers=req_headers)
             elif method == 'PUT':
-                response = requests.put(url, json=data, headers=headers, params=params, timeout=10)
+                response = requests.put(url, json=data, headers=req_headers)
             elif method == 'DELETE':
-                response = requests.delete(url, headers=headers, params=params, timeout=10)
-            
+                response = requests.delete(url, headers=req_headers)
+
             success = response.status_code == expected_status
-            return success, response.json() if success else response.text, response.status_code
+            if success:
+                self.tests_passed += 1
+                print(f"✅ Passed - Status: {response.status_code}")
+                try:
+                    return True, response.json() if response.content else {}
+                except:
+                    return True, {}
+            else:
+                print(f"❌ Failed - Expected {expected_status}, got {response.status_code}")
+                try:
+                    print(f"   Response: {response.json()}")
+                except:
+                    print(f"   Response: {response.text}")
+                return False, {}
+
         except Exception as e:
-            return False, str(e), 0
+            print(f"❌ Failed - Error: {str(e)}")
+            return False, {}
 
-    def test_health_check(self):
-        """Test health endpoint"""
-        success, data, status = self.make_request('GET', 'health')
-        self.log_result("Health Check", success and data.get('status') == 'healthy')
+    def login_user(self, email, password, description=""):
+        """Login and get token"""
+        success, response = self.run_test(
+            f"Login {description}",
+            "POST",
+            "api/auth/login",
+            200,
+            data={"email": email, "password": password}
+        )
+        if success and 'token' in response:
+            return response['token']
+        return None
 
-    def test_login(self, email, password):
-        """Test login functionality"""
-        success, data, status = self.make_request('POST', 'auth/login', {
-            'email': email,
-            'password': password
-        })
+    def setup_auth(self):
+        """Setup authentication for different user types"""
+        print("\n🔐 Setting up authentication...")
         
-        if success and 'token' in data:
-            self.token = data['token']
-            self.user_data = data['user']
-            self.log_result(f"Login ({email})", True)
-            return True
-        else:
-            self.log_result(f"Login ({email})", False, f"Status: {status}, Response: {data}")
+        self.admin_token = self.login_user("admin@fnb.com", "admin123", "Admin")
+        if not self.admin_token:
+            return False
+            
+        self.chef_token = self.login_user("chef.sudirman@fnb.com", "kitchen123", "Chef")
+        if not self.chef_token:
+            return False
+            
+        self.manager_token = self.login_user("manager.sudirman@fnb.com", "manager123", "Manager")
+        if not self.manager_token:
             return False
 
-    def test_get_me(self):
-        """Test get current user info"""
-        success, data, status = self.make_request('GET', 'auth/me')
-        self.log_result("Get User Info", success and 'user' in data)
+        return True
 
-    def test_get_portals(self):
-        """Test get available portals"""
-        success, data, status = self.make_request('GET', 'auth/portals')
-        self.log_result("Get Portals", success and isinstance(data, list))
-
-    def test_dashboard_summary(self):
-        """Test dashboard summary"""
-        success, data, status = self.make_request('GET', 'dashboard/summary')
-        expected_keys = ['outlets_count', 'users_count', 'items_count', 'pending_approvals']
-        has_keys = all(key in data for key in expected_keys) if success else False
-        self.log_result("Dashboard Summary", success and has_keys)
-
-    def test_finance_accounts(self):
-        """Test finance accounts endpoints"""
-        # List accounts
-        success, data, status = self.make_request('GET', 'finance/accounts')
-        if success and 'accounts' in data:
-            # Check if accounts have the right structure
-            accounts = data['accounts']
-            if accounts:
-                # Use '_id' or 'id' depending on what's available
-                first_acc = accounts[0]
-                id_field = '_id' if '_id' in first_acc else 'id'
-                self.account_ids = [acc[id_field] for acc in accounts[:3]]
-            self.log_result("List Finance Accounts", True)
-        else:
-            self.log_result("List Finance Accounts", False, f"Status: {status}")
-
-        # Test finance dashboard
-        success, data, status = self.make_request('GET', 'finance/dashboard')
-        expected_keys = ['balance_by_type', 'recent_movements', 'total_bank_balance']
-        has_keys = all(key in data for key in expected_keys) if success else False
-        self.log_result("Finance Dashboard", success and has_keys)
-
-    def test_cash_movements(self):
-        """Test cash movements"""
-        success, data, status = self.make_request('GET', 'finance/cash-movements')
-        self.log_result("List Cash Movements", success and 'movements' in data)
-
-    def test_inventory_items(self):
-        """Test inventory items"""
-        # List items
-        success, data, status = self.make_request('GET', 'inventory/items')
-        if success and 'items' in data:
-            items = data['items']
-            if items:
-                # Use '_id' or 'id' depending on what's available
-                first_item = items[0]
-                id_field = '_id' if '_id' in first_item else 'id'
-                self.item_ids = [item[id_field] for item in items[:3]]
-            self.log_result("List Inventory Items", True)
-        else:
-            self.log_result("List Inventory Items", False, f"Status: {status}")
-
-        # List categories
-        success, data, status = self.make_request('GET', 'inventory/categories')
-        self.log_result("List Item Categories", success and 'categories' in data)
-
-    def test_stock_on_hand(self):
-        """Test stock on hand"""
-        success, data, status = self.make_request('GET', 'inventory/stock')
-        self.log_result("List Stock on Hand", success and 'stock' in data)
-
-    def test_stock_movements(self):
-        """Test stock movements"""
-        success, data, status = self.make_request('GET', 'inventory/stock-movements')
-        self.log_result("List Stock Movements", success and 'movements' in data)
-
-    def test_inventory_dashboard(self):
-        """Test inventory dashboard"""
-        success, data, status = self.make_request('GET', 'inventory/dashboard')
-        expected_keys = ['total_items', 'total_stock_value', 'low_stock_count']
-        has_keys = all(key in data for key in expected_keys) if success else False
-        self.log_result("Inventory Dashboard", success and has_keys)
-
-    def test_reports(self):
-        """Test reports endpoints"""
-        # P&L Report
-        success, data, status = self.make_request('GET', 'reports/pnl')
-        expected_keys = ['total_revenue', 'total_cogs', 'net_profit', 'margin_percentage']
-        has_keys = all(key in data for key in expected_keys) if success else False
-        self.log_result("P&L Report", success and has_keys)
-
-        # Cashflow Report
-        success, data, status = self.make_request('GET', 'reports/cashflow')
-        expected_keys = ['total_inflow', 'total_outflow', 'net_cashflow']
-        has_keys = all(key in data for key in expected_keys) if success else False
-        self.log_result("Cashflow Report", success and has_keys)
-
-        # Balance Sheet
-        success, data, status = self.make_request('GET', 'reports/balance-sheet')
-        expected_keys = ['assets', 'liabilities', 'equity']
-        has_keys = all(key in data for key in expected_keys) if success else False
-        self.log_result("Balance Sheet", success and has_keys)
-
-        # Inventory Valuation
-        success, data, status = self.make_request('GET', 'reports/inventory-valuation')
-        expected_keys = ['items', 'total_value']
-        has_keys = all(key in data for key in expected_keys) if success else False
-        self.log_result("Inventory Valuation", success and has_keys)
-
-    def test_create_cash_movement(self):
-        """Test creating a cash movement"""
-        if not self.account_ids:
-            self.log_result("Create Cash Movement", False, "No account IDs available")
-            return
-
-        # Get outlets first
-        success, data, status = self.make_request('GET', 'finance/accounts')
+    def test_kitchen_apis(self):
+        """Test all Kitchen APIs comprehensively"""
+        print("\n🍳 Testing Kitchen Portal APIs...")
+        
+        # 1. Kitchen Queue API
+        success, response = self.run_test(
+            "Kitchen Queue - Get queue with groups and stats",
+            "GET",
+            "api/kitchen/queue",
+            200,
+            data={"outlet_id": self.sudirman_outlet_id},
+            token=self.chef_token
+        )
+        
         if not success:
-            self.log_result("Create Cash Movement", False, "Could not get accounts")
-            return
-
-        # Find an outlet ID from accounts
-        outlet_id = None
-        to_account_id = None
-        for acc in data.get('accounts', []):
-            if acc.get('outlet_id'):
-                outlet_id = acc['outlet_id']
-                # Use correct ID field
-                id_field = '_id' if '_id' in acc else 'id'
-                to_account_id = acc[id_field]
-                break
-
-        if not outlet_id or not to_account_id:
-            self.log_result("Create Cash Movement", False, "No outlet or account found")
-            return
-
-        movement_data = {
-            "type": "cash_in",
-            "to_account_id": to_account_id,
-            "amount": 100000,
-            "outlet_id": outlet_id,
-            "reference": "TEST-MOVEMENT",
-            "description": "Test cash movement from API test"
-        }
-
-        success, data, status = self.make_request('POST', 'finance/cash-movements', movement_data, expected_status=200)
-        self.log_result("Create Cash Movement", success and 'id' in data)
-
-    def test_create_inventory_item(self):
-        """Test creating an inventory item"""
-        item_data = {
-            "name": f"Test Item {datetime.now().strftime('%H%M%S')}",
-            "category": "Test Category",
-            "uom": "kg",
-            "pack_size": 1,
-            "material_level": "raw",
-            "reorder_threshold": 10,
-            "cost_per_unit": 5000,
-            "description": "Test item created by API test"
-        }
-
-        success, data, status = self.make_request('POST', 'inventory/items', item_data, expected_status=200)
-        self.log_result("Create Inventory Item", success and 'id' in data)
-
-    def test_cashier_menu(self):
-        """Test cashier menu endpoints"""
-        # Get outlets first to use in menu tests
-        success, data, status = self.make_request('GET', 'finance/accounts')
-        outlet_id = None
-        if success and data.get('accounts'):
-            for acc in data['accounts']:
-                if acc.get('outlet_id'):
-                    outlet_id = acc['outlet_id']
-                    break
-        
-        if not outlet_id:
-            # Try to get outlets from a different endpoint
-            success, data, status = self.make_request('GET', 'core/outlets')
-            if success and data.get('outlets'):
-                outlet_id = data['outlets'][0].get('_id') or data['outlets'][0].get('id')
-        
-        # Test menu list
-        params = {'outlet_id': outlet_id} if outlet_id else {}
-        success, data, status = self.make_request('GET', 'cashier/menu', params=params)
-        expected_keys = ['items', 'categories', 'total']
-        has_keys = all(key in data for key in expected_keys) if success else False
-        self.log_result("Get Cashier Menu", success and has_keys)
-        
-        # Store menu items for later tests
-        if success and data.get('items'):
-            self.menu_items = data['items'][:3]  # Store first 3 items
-        else:
-            self.menu_items = []
-
-    def test_cashier_shifts(self):
-        """Test cashier shift management"""
-        # Get outlets first
-        success, data, status = self.make_request('GET', 'finance/accounts')
-        outlet_id = None
-        if success and data.get('accounts'):
-            for acc in data['accounts']:
-                if acc.get('outlet_id'):
-                    outlet_id = acc['outlet_id']
-                    break
-        
-        if not outlet_id:
-            # Try to get outlets from a different endpoint
-            success, data, status = self.make_request('GET', 'core/outlets')
-            if success and data.get('outlets'):
-                outlet_id = data['outlets'][0].get('_id') or data['outlets'][0].get('id')
-        
-        if not outlet_id:
-            self.log_result("Cashier Shift Tests", False, "No outlet ID found")
-            return
-        
-        # Test get current shift (should be none initially)
-        success, data, status = self.make_request('GET', 'cashier/shifts/current', params={'outlet_id': outlet_id})
-        self.log_result("Get Current Shift", success and 'shift' in data)
-        
-        # Test open shift
-        shift_data = {
-            "outlet_id": outlet_id,
-            "opening_cash": 100000,
-            "notes": "Test shift opening"
-        }
-        success, data, status = self.make_request('POST', 'cashier/shifts/open', shift_data)
-        if success and 'id' in data:
-            self.shift_id = data['id']
-            self.log_result("Open Cashier Shift", True)
-        else:
-            # Might already have an open shift, try to get current
-            success, data, status = self.make_request('GET', 'cashier/shifts/current', params={'outlet_id': outlet_id})
-            if success and data.get('shift'):
-                self.shift_id = data['shift']['id']
-                self.log_result("Open Cashier Shift", True, "Using existing open shift")
-            else:
-                self.log_result("Open Cashier Shift", False, f"Status: {status}")
-                self.shift_id = None
-        
-        # Test list shifts
-        success, data, status = self.make_request('GET', 'cashier/shifts', params={'outlet_id': outlet_id})
-        self.log_result("List Cashier Shifts", success and 'shifts' in data)
-
-    def test_cashier_orders(self):
-        """Test cashier order management"""
-        if not hasattr(self, 'shift_id') or not self.shift_id:
-            self.log_result("Cashier Order Tests", False, "No open shift available")
-            return
-        
-        # Get outlet ID from shift or accounts
-        success, data, status = self.make_request('GET', 'finance/accounts')
-        outlet_id = None
-        if success and data.get('accounts'):
-            for acc in data['accounts']:
-                if acc.get('outlet_id'):
-                    outlet_id = acc['outlet_id']
-                    break
-        
-        if not outlet_id:
-            self.log_result("Cashier Order Tests", False, "No outlet ID found")
-            return
-        
-        # Test create order
-        if hasattr(self, 'menu_items') and self.menu_items:
-            menu_item = self.menu_items[0]
-            order_data = {
-                "outlet_id": outlet_id,
-                "order_type": "dine_in",
-                "customer_name": "Test Customer",
-                "table_number": "T1",
-                "lines": [{
-                    "menu_item_id": menu_item.get('_id') or menu_item.get('id'),
-                    "name": menu_item.get('name', 'Test Item'),
-                    "qty": 2,
-                    "price": menu_item.get('price', 25000),
-                    "notes": ""
-                }],
-                "notes": "Test order",
-                "discount": 0,
-                "tax_rate": 0
-            }
+            return False
             
-            success, data, status = self.make_request('POST', 'cashier/orders', order_data)
-            if success and data.get('order'):
-                self.order_id = data['order']['id']
-                self.log_result("Create POS Order", True)
-                
-                # Test pay order
-                pay_data = {
-                    "payment_method": "cash",
-                    "amount_tendered": data['order']['total'] + 10000,  # Extra for change
-                    "notes": "Test payment"
-                }
-                success, pay_response, status = self.make_request('POST', f'cashier/orders/{self.order_id}/pay', pay_data)
-                self.log_result("Pay POS Order", success and 'change' in pay_response)
-            else:
-                self.log_result("Create POS Order", False, f"Status: {status}")
-                self.order_id = None
-        else:
-            self.log_result("Create POS Order", False, "No menu items available")
-        
-        # Test list orders
-        success, data, status = self.make_request('GET', 'cashier/orders', params={'outlet_id': outlet_id})
-        self.log_result("List POS Orders", success and 'orders' in data)
-
-    def test_cashier_dashboard(self):
-        """Test cashier dashboard"""
-        # Get outlet ID
-        success, data, status = self.make_request('GET', 'finance/accounts')
-        outlet_id = None
-        if success and data.get('accounts'):
-            for acc in data['accounts']:
-                if acc.get('outlet_id'):
-                    outlet_id = acc['outlet_id']
-                    break
-        
-        if not outlet_id:
-            self.log_result("Cashier Dashboard", False, "No outlet ID found")
-            return
-        
-        success, data, status = self.make_request('GET', 'cashier/dashboard', params={'outlet_id': outlet_id})
-        expected_keys = ['today_orders', 'today_sales', 'open_orders', 'current_shift', 'top_items']
-        has_keys = all(key in data for key in expected_keys) if success else False
-        self.log_result("Cashier Dashboard", success and has_keys)
-
-    def test_cashier_void_order(self):
-        """Test voiding an order"""
-        if not hasattr(self, 'order_id') or not self.order_id:
-            # Create a test order first
-            self.test_cashier_orders()
-        
-        if hasattr(self, 'order_id') and self.order_id:
-            # Create another order to void
-            success, data, status = self.make_request('GET', 'finance/accounts')
-            outlet_id = None
-            if success and data.get('accounts'):
-                for acc in data['accounts']:
-                    if acc.get('outlet_id'):
-                        outlet_id = acc['outlet_id']
-                        break
+        # Verify response structure
+        if not all(key in response for key in ['groups', 'stats']):
+            print("❌ Missing groups or stats in queue response")
+            return False
             
-            if outlet_id and hasattr(self, 'menu_items') and self.menu_items:
-                menu_item = self.menu_items[0]
-                order_data = {
-                    "outlet_id": outlet_id,
-                    "order_type": "takeaway",
-                    "customer_name": "Test Void Customer",
-                    "lines": [{
-                        "menu_item_id": menu_item.get('_id') or menu_item.get('id'),
-                        "name": menu_item.get('name', 'Test Item'),
-                        "qty": 1,
-                        "price": menu_item.get('price', 25000),
-                        "notes": ""
-                    }],
-                    "notes": "Order to be voided",
-                    "discount": 0,
-                    "tax_rate": 0
-                }
-                
-                success, data, status = self.make_request('POST', 'cashier/orders', order_data)
-                if success and data.get('order'):
-                    void_order_id = data['order']['id']
-                    
-                    # Now void it
-                    void_data = {"reason": "Customer changed mind"}
-                    success, void_response, status = self.make_request('POST', f'cashier/orders/{void_order_id}/void', void_data)
-                    self.log_result("Void POS Order", success)
-                else:
-                    self.log_result("Void POS Order", False, "Could not create order to void")
-            else:
-                self.log_result("Void POS Order", False, "Missing outlet or menu items")
-        else:
-            self.log_result("Void POS Order", False, "No order available to test void")
-
-    def test_cashier_close_shift(self):
-        """Test closing a shift"""
-        if not hasattr(self, 'shift_id') or not self.shift_id:
-            self.log_result("Close Cashier Shift", False, "No open shift to close")
-            return
+        groups = response['groups']
+        stats = response['stats']
         
-        close_data = {
-            "actual_cash": 150000,  # Some amount
-            "notes": "Test shift closing"
+        # Check required groups
+        required_groups = ['queued', 'preparing', 'ready', 'served']
+        if not all(group in groups for group in required_groups):
+            print(f"❌ Missing queue groups. Found: {list(groups.keys())}")
+            return False
+            
+        print(f"✅ Queue structure correct. Stats: {stats}")
+        
+        # 2. Kitchen Ticket Status Update
+        success, response = self.run_test(
+            "Kitchen Ticket - Update status to ready",
+            "POST",
+            f"api/kitchen/tickets/{self.test_order_id}/status",
+            200,
+            data={"status": "ready"},
+            token=self.chef_token
+        )
+        
+        if not success:
+            return False
+            
+        # 3. Kitchen Waste API
+        waste_data = {
+            "outlet_id": self.sudirman_outlet_id,
+            "item_name": "Test Waste Item",
+            "quantity": 1,
+            "uom": "pcs",
+            "reason": "Testing waste API",
+            "category": "error",
+            "cost": 5000,
+            "notes": "API test"
         }
         
-        success, data, status = self.make_request('POST', f'cashier/shifts/{self.shift_id}/close', close_data)
-        expected_keys = ['totals', 'expected_cash', 'actual_cash', 'variance']
-        has_keys = all(key in data for key in expected_keys) if success else False
-        self.log_result("Close Cashier Shift", success and has_keys)
+        success, response = self.run_test(
+            "Kitchen Waste - Create entry",
+            "POST",
+            "api/kitchen/waste",
+            200,
+            data=waste_data,
+            token=self.chef_token
+        )
+        
+        if not success:
+            return False
+            
+        waste_id = response.get('id')
+        if not waste_id:
+            print("❌ No waste ID returned")
+            return False
+            
+        # List waste
+        success, response = self.run_test(
+            "Kitchen Waste - List with aggregation",
+            "GET",
+            "api/kitchen/waste",
+            200,
+            data={"outlet_id": self.sudirman_outlet_id},
+            token=self.chef_token
+        )
+        
+        if not success:
+            return False
+            
+        if not all(key in response for key in ['waste', 'total_cost']):
+            print("❌ Missing waste or total_cost in response")
+            return False
+            
+        print(f"✅ Waste list: {len(response['waste'])} entries, total cost: {response['total_cost']}")
+        
+        # Delete waste
+        success, response = self.run_test(
+            "Kitchen Waste - Delete entry",
+            "DELETE",
+            f"api/kitchen/waste/{waste_id}",
+            200,
+            token=self.chef_token
+        )
+        
+        if not success:
+            return False
+            
+        # 4. Kitchen Dashboard
+        success, response = self.run_test(
+            "Kitchen Dashboard - Get KPIs",
+            "GET",
+            "api/kitchen/dashboard",
+            200,
+            data={"outlet_id": self.sudirman_outlet_id},
+            token=self.chef_token
+        )
+        
+        if not success:
+            return False
+            
+        # Check required KPI fields
+        required_fields = ['paid_today', 'queued', 'preparing', 'ready', 'served', 
+                         'avg_prep_minutes', 'waste_today_count', 'waste_today_cost']
+        
+        if not all(field in response for field in required_fields):
+            missing = [f for f in required_fields if f not in response]
+            print(f"❌ Missing KPI fields: {missing}")
+            return False
+            
+        print(f"✅ Dashboard KPIs complete")
+        
+        return True
 
-    def run_all_tests(self):
-        """Run all test suites"""
-        print("🚀 Starting F&B ERP Backend API Tests")
-        print("=" * 50)
+    def test_daily_closing_integration(self):
+        """Test Daily Closing Integration with Cashier Shifts"""
+        print("\n📋 Testing Daily Closing Integration...")
+        
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        
+        success, response = self.run_test(
+            "Daily Closing - Get status with shift integration",
+            "GET",
+            "api/daily-closing/status",
+            200,
+            data={"outlet_id": self.sudirman_outlet_id, "date": today},
+            token=self.manager_token
+        )
+        
+        if not success:
+            return False
+            
+        # Check new Phase 3C fields
+        required_fields = ['shift_summary', 'shifts', 'discrepancies', 'checklist']
+        
+        if not all(field in response for field in required_fields):
+            missing = [f for f in required_fields if f not in response]
+            print(f"❌ Missing closing status fields: {missing}")
+            return False
+            
+        # Check checklist has cashier_shifts
+        checklist = response.get('checklist', {})
+        if 'cashier_shifts' not in checklist:
+            print("❌ Missing cashier_shifts in checklist")
+            return False
+            
+        # Check shift_summary structure
+        shift_summary = response.get('shift_summary', {})
+        summary_fields = ['total_orders', 'total_sales', 'cash_sales', 'card_sales', 
+                        'expected_cash_total', 'actual_cash_total', 'variance_total']
+        
+        if not all(field in shift_summary for field in summary_fields):
+            missing = [f for f in summary_fields if f not in shift_summary]
+            print(f"❌ Missing shift summary fields: {missing}")
+            return False
+            
+        print(f"✅ Daily closing integration complete")
+        print(f"   Shift summary: {shift_summary}")
+        print(f"   Discrepancies: {len(response.get('discrepancies', []))}")
+        
+        return True
 
-        # Test credentials from the review request
-        test_credentials = [
-            ("admin@fnb.com", "admin123"),
-            ("cashier.sudirman@fnb.com", "cashier123"),
-            ("cashier.kemang@fnb.com", "cashier123"),
-            ("finance@fnb.com", "finance123"),
-            ("manager.sudirman@fnb.com", "manager123"),
-            ("inventory@fnb.com", "inventory123")
+    def test_access_control(self):
+        """Test Kitchen Access Control"""
+        print("\n🔒 Testing Kitchen Access Control...")
+        
+        # Chef should only see Sudirman outlet data
+        success, response = self.run_test(
+            "Kitchen Access - Chef can access Sudirman",
+            "GET",
+            "api/kitchen/queue",
+            200,
+            data={"outlet_id": self.sudirman_outlet_id},
+            token=self.chef_token
+        )
+        
+        if not success:
+            return False
+            
+        # Verify chef has limited portal access
+        success, response = self.run_test(
+            "Kitchen Access - Chef dashboard access",
+            "GET",
+            "api/kitchen/dashboard",
+            200,
+            data={"outlet_id": self.sudirman_outlet_id},
+            token=self.chef_token
+        )
+        
+        return success
+
+    def test_regression_apis(self):
+        """Test regression - existing APIs still work"""
+        print("\n🔄 Testing Regression - Core APIs...")
+        
+        endpoints = [
+            ("Health check", "GET", "api/health", 200, None),
+            ("Dashboard summary", "GET", "api/dashboard/summary", 200, None),
+            ("Outlets list", "GET", "api/core/outlets", 200, None),
+            ("Menu items", "GET", "api/cashier/menu", 200, None),
+            ("Current shift", "GET", "api/cashier/shifts/current", 200, {"outlet_id": self.sudirman_outlet_id}),
         ]
-
-        # Test health first
-        self.test_health_check()
-
-        # Test login with different users, prioritize cashier users for cashier tests
-        login_success = False
-        for email, password in test_credentials:
-            if self.test_login(email, password):
-                login_success = True
-                break
-
-        if not login_success:
-            print("❌ No successful login, stopping tests")
-            return
-
-        # Test authenticated endpoints
-        self.test_get_me()
-        self.test_get_portals()
-        self.test_dashboard_summary()
         
-        # Finance tests
-        self.test_finance_accounts()
-        self.test_cash_movements()
-        
-        # Inventory tests
-        self.test_inventory_items()
-        self.test_stock_on_hand()
-        self.test_stock_movements()
-        self.test_inventory_dashboard()
-        
-        # Reports tests
-        self.test_reports()
-        
-        # Create operations tests
-        self.test_create_cash_movement()
-        self.test_create_inventory_item()
-        
-        # Cashier Portal tests (Phase 3A)
-        print("\n🏪 Testing Cashier Portal APIs...")
-        self.test_cashier_menu()
-        self.test_cashier_shifts()
-        self.test_cashier_orders()
-        self.test_cashier_dashboard()
-        self.test_cashier_void_order()
-        self.test_cashier_close_shift()
-
-        # Print summary
-        print("\n" + "=" * 50)
-        print(f"📊 Test Summary: {self.tests_passed}/{self.tests_run} passed")
-        
-        if self.failed_tests:
-            print("\n❌ Failed Tests:")
-            for failed in self.failed_tests:
-                print(f"  - {failed['test']}: {failed['details']}")
-        
-        return self.tests_passed == self.tests_run
+        for name, method, endpoint, expected, params in endpoints:
+            success, response = self.run_test(
+                f"Regression - {name}",
+                method,
+                endpoint,
+                expected,
+                data=params,
+                token=self.admin_token
+            )
+            if not success:
+                return False
+                
+        return True
 
 def main():
-    """Main test runner"""
-    tester = FnBERPTester()
-    success = tester.run_all_tests()
-    return 0 if success else 1
+    print("🚀 F&B ERP Phase 3B/3C/3D Comprehensive Testing")
+    print("Testing: Kitchen Portal MVP, Daily Closing Integration, DataTable Rollout")
+    
+    tester = FnBERPTesterSimple()
+    
+    # Setup authentication
+    if not tester.setup_auth():
+        print("❌ Authentication setup failed")
+        return 1
+    
+    # Run all tests
+    tests = [
+        tester.test_kitchen_apis,
+        tester.test_daily_closing_integration,
+        tester.test_access_control,
+        tester.test_regression_apis,
+    ]
+    
+    failed_tests = []
+    for test in tests:
+        try:
+            if not test():
+                failed_tests.append(test.__name__)
+        except Exception as e:
+            print(f"❌ {test.__name__} failed with exception: {e}")
+            failed_tests.append(test.__name__)
+    
+    # Print results
+    print(f"\n📊 Final Test Results:")
+    print(f"Tests passed: {tester.tests_passed}/{tester.tests_run}")
+    print(f"Success rate: {(tester.tests_passed/tester.tests_run)*100:.1f}%")
+    
+    if failed_tests:
+        print(f"\n❌ Failed test categories: {', '.join(failed_tests)}")
+        return 1
+    else:
+        print(f"\n✅ All test categories passed!")
+        return 0
 
 if __name__ == "__main__":
     sys.exit(main())

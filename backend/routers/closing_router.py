@@ -3,13 +3,15 @@ from pydantic import BaseModel
 from typing import Optional
 from database import (
     daily_closings_col, sales_summaries_col, petty_cash_col,
-    stock_movements_col, reconciliations_col, outlets_col
+    stock_movements_col, reconciliations_col, outlets_col,
+    cashier_shifts_col, pos_orders_col,
 )
 from auth import get_current_user, check_permission, check_outlet_access
 from utils.audit import log_audit, serialize_doc
 from utils.helpers import now_utc
 from websocket_manager import ws_manager
 from bson import ObjectId
+from datetime import datetime, timezone, timedelta
 
 router = APIRouter(prefix="/api/daily-closing", tags=["daily_closing"])
 
@@ -62,22 +64,104 @@ async def get_closing_status(current_user: dict = Depends(get_current_user), out
     recon_count = await reconciliations_col.count_documents({"outlet_id": outlet_id, "date": date})
     recon_unresolved = await reconciliations_col.count_documents({"outlet_id": outlet_id, "date": date, "status": "variance"})
     
+    # ----- Phase 3C: Integrate cashier shifts -----
+    try:
+        day_start = datetime.fromisoformat(date).replace(tzinfo=timezone.utc)
+        day_end = day_start + timedelta(days=1)
+    except Exception:
+        day_start = None
+        day_end = None
+
+    shifts_open = 0
+    shifts_closed = 0
+    shift_summary = {
+        "total_orders": 0,
+        "total_sales": 0.0,
+        "cash_sales": 0.0,
+        "card_sales": 0.0,
+        "online_sales": 0.0,
+        "other_sales": 0.0,
+        "expected_cash_total": 0.0,
+        "actual_cash_total": 0.0,
+        "variance_total": 0.0,
+        "max_variance": 0.0,
+    }
+    shift_list = []
+    if day_start:
+        query = {"outlet_id": outlet_id, "opened_at": {"$gte": day_start, "$lt": day_end}}
+        async for s in cashier_shifts_col.find(query).sort("opened_at", 1):
+            doc = serialize_doc(s)
+            shift_list.append(doc)
+            if s.get("status") == "open":
+                shifts_open += 1
+            else:
+                shifts_closed += 1
+                t = s.get("totals", {}) or {}
+                shift_summary["total_orders"] += int(t.get("total_orders", 0) or 0)
+                shift_summary["total_sales"] += float(t.get("total_sales", 0) or 0)
+                shift_summary["cash_sales"] += float(t.get("cash_sales", 0) or 0)
+                shift_summary["card_sales"] += float(t.get("card_sales", 0) or 0)
+                shift_summary["online_sales"] += float(t.get("online_sales", 0) or 0)
+                shift_summary["other_sales"] += float(t.get("other_sales", 0) or 0)
+                shift_summary["expected_cash_total"] += float(s.get("closing_cash_expected", 0) or 0)
+                shift_summary["actual_cash_total"] += float(s.get("closing_cash_actual", 0) or 0)
+                v = float(s.get("variance", 0) or 0)
+                shift_summary["variance_total"] += v
+                if abs(v) > abs(shift_summary["max_variance"]):
+                    shift_summary["max_variance"] = v
+
+    # Discrepancy flags
+    discrepancies = []
+    # Threshold for cashier variance (10,000 IDR per shift)
+    VARIANCE_THRESHOLD = 10000
+    if abs(shift_summary["variance_total"]) > VARIANCE_THRESHOLD:
+        discrepancies.append({
+            "type": "cash_variance",
+            "severity": "warning" if abs(shift_summary["variance_total"]) < 50000 else "critical",
+            "message": f"Total variance kas shift: {shift_summary['variance_total']:,.0f}",
+        })
+    if shifts_open > 0:
+        discrepancies.append({
+            "type": "open_shifts",
+            "severity": "critical",
+            "message": f"{shifts_open} shift kasir belum ditutup",
+        })
+    if shifts_closed == 0 and sales_count == 0:
+        discrepancies.append({
+            "type": "no_sales_data",
+            "severity": "warning",
+            "message": "Tidak ada shift atau ringkasan penjualan untuk tanggal ini",
+        })
+
+    # Has cashier data flag
+    has_cashier_data = (shifts_open + shifts_closed) > 0
+    shift_complete = has_cashier_data and shifts_open == 0
+
     checklist = {
-        "sales_summary": {"complete": sales_count > 0, "count": sales_count},
+        "sales_summary": {"complete": sales_count > 0 or shift_complete, "count": sales_count},
         "petty_cash": {"complete": True, "count": petty_count},  # OK even if 0
         "stock_movements": {"complete": True, "count": stock_count},  # OK even if 0
         "cash_reconciliation": {"complete": recon_count > 0 and recon_unresolved == 0, "count": recon_count, "unresolved": recon_unresolved},
+        "cashier_shifts": {"complete": shift_complete if has_cashier_data else True, "count": shifts_closed, "open_count": shifts_open, "has_data": has_cashier_data},
     }
     
-    all_complete = checklist["sales_summary"]["complete"] and checklist["cash_reconciliation"]["complete"]
+    all_complete = (checklist["sales_summary"]["complete"] and
+                    checklist["cash_reconciliation"]["complete"] and
+                    checklist["cashier_shifts"]["complete"])
     
+    # Block submit if critical discrepancy
+    has_critical = any(d.get("severity") == "critical" for d in discrepancies)
+
     return {
         "closing": serialize_doc(closing) if closing else None,
         "status": closing["status"] if closing else "open",
         "checklist": checklist,
-        "can_submit": all_complete and (not closing or closing.get("status") in ["open", "in_progress"]),
+        "can_submit": all_complete and not has_critical and (not closing or closing.get("status") in ["open", "in_progress"]),
         "date": date,
         "outlet_id": outlet_id,
+        "shift_summary": shift_summary,
+        "shifts": shift_list,
+        "discrepancies": discrepancies,
     }
 
 @router.post("/start")

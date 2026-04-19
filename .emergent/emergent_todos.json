@@ -1,34 +1,18 @@
 [
   {
-    "content": "Backend: create cashier_router with POS orders, payments, shifts endpoints + DB collections",
+    "content": "Phase 3B: Kitchen Portal MVP",
     "status": "completed"
   },
   {
-    "content": "Backend: seed menu items (POS products with price) + demo cashier user",
+    "content": "Phase 3C: Daily Closing integrated with Cashier shifts + discrepancies",
     "status": "completed"
   },
   {
-    "content": "Frontend: create CashierLayout (topbar + nav POS/Payment/Shift + outlet selector)",
+    "content": "Phase 3D.1: DataTable rollout (Cash Management + Sales Summary + Petty Cash)",
     "status": "completed"
   },
   {
-    "content": "Frontend: POS page (menu grid + cart + checkout)",
-    "status": "completed"
-  },
-  {
-    "content": "Frontend: Payment/Orders page (list orders, pay, void)",
-    "status": "completed"
-  },
-  {
-    "content": "Frontend: Shift page (open/close shift + summary + variance)",
-    "status": "completed"
-  },
-  {
-    "content": "Activate Cashier portal in PortalSelector and routing in App.js",
-    "status": "completed"
-  },
-  {
-    "content": "Run comprehensive backend + frontend tests via testing agent",
-    "status": "completed"
+    "content": "Phase 3D.2: Final comprehensive regression testing via testing agent",
+    "status": "in_progress"
   }
 ]

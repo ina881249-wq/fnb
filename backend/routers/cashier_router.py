@@ -512,6 +512,13 @@ async def pay_order(order_id: str, req: OrderPayRequest, current_user: dict = De
         "order_id": order_id,
         "order_number": order.get("order_number"),
     })
+    # Notify kitchen immediately
+    await ws_manager.broadcast_all({
+        "type": "kitchen_ticket_new",
+        "outlet_id": order["outlet_id"],
+        "order_id": order_id,
+        "order_number": order.get("order_number"),
+    })
     updated = await pos_orders_col.find_one({"_id": oid})
     return {"order": serialize_doc(updated), "change": change}
 

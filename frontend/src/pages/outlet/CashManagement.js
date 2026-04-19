@@ -1,25 +1,31 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import api from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { useLang } from '../../context/LangContext';
+import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog';
 import { Badge } from '../../components/ui/badge';
-import { Plus, DollarSign, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { Plus, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { toast } from 'sonner';
+import { DataTable } from '../../components/common/DataTable';
 
 const formatCurrency = (val) => `Rp ${(val || 0).toLocaleString('id-ID')}`;
 
 export default function CashManagement() {
   const { currentOutlet } = useAuth();
+  const { lang } = useLang();
   const [accounts, setAccounts] = useState([]);
   const [movements, setMovements] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
   const [newMovement, setNewMovement] = useState({ type: 'cash_in', to_account_id: '', amount: 0, reference: '', description: '' });
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
 
   const fetchData = async () => {
     if (!currentOutlet) return;
@@ -34,6 +40,38 @@ export default function CashManagement() {
   };
 
   useEffect(() => { fetchData(); }, [currentOutlet]);
+
+  const filteredMovements = useMemo(() => {
+    return movements.filter(m => {
+      if (typeFilter !== 'all' && m.type !== typeFilter) return false;
+      if (search) {
+        const s = search.toLowerCase();
+        if (!(m.description?.toLowerCase().includes(s) || m.reference?.toLowerCase().includes(s) || m.date?.includes(s))) return false;
+      }
+      return true;
+    });
+  }, [movements, typeFilter, search]);
+
+  const columns = [
+    { key: 'date', label: lang === 'id' ? 'Tanggal' : 'Date', sortable: true, width: '120px',
+      render: (v) => <span className="text-xs">{v}</span> },
+    { key: 'type', label: lang === 'id' ? 'Tipe' : 'Type', width: '130px',
+      render: (v) => (
+        <div className="flex items-center gap-1.5">
+          {v === 'cash_in' ? <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" /> : <ArrowDownRight className="w-3.5 h-3.5 text-red-400" />}
+          <Badge variant="outline" className={`text-[10px] ${v === 'cash_in' ? 'border-emerald-500/30 text-emerald-400' : 'border-red-500/30 text-red-400'}`}>{v?.replace('_', ' ')}</Badge>
+        </div>
+      )
+    },
+    { key: 'description', label: lang === 'id' ? 'Deskripsi' : 'Description',
+      render: (v, row) => v || row.reference || '-' },
+    { key: 'reference', label: 'Ref', width: '140px',
+      render: (v) => <span className="text-xs text-[hsl(var(--muted-foreground))] font-mono">{v || '-'}</span> },
+    { key: 'amount', label: 'Amount', align: 'right', sortable: true, width: '140px',
+      render: (v) => <span className="font-medium" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(v)}</span> },
+    { key: 'status', label: 'Status', width: '100px',
+      render: (v) => <Badge variant="outline" className="text-[10px]">{v}</Badge> },
+  ];
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -92,32 +130,26 @@ export default function CashManagement() {
       </div>
 
       {/* Movements */}
-      <Card className="bg-[var(--glass-bg)] border-[var(--glass-border)]">
-        <CardHeader><CardTitle className="text-sm" style={{ fontFamily: 'Space Grotesk' }}>Recent Movements</CardTitle></CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader><TableRow className="border-[var(--glass-border)] hover:bg-transparent">
-              <TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Description</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead>
-            </TableRow></TableHeader>
-            <TableBody>
-              {movements.map(m => (
-                <TableRow key={m.id} className="border-[var(--glass-border)] hover:bg-white/5">
-                  <TableCell className="text-sm">{m.date}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      {m.type === 'cash_in' ? <ArrowUpRight className="w-3.5 h-3.5 text-green-400" /> : <ArrowDownRight className="w-3.5 h-3.5 text-red-400" />}
-                      <Badge variant="outline" className={`text-[10px] ${m.type === 'cash_in' ? 'border-green-500/30 text-green-400' : 'border-red-500/30 text-red-400'}`}>{m.type?.replace('_', ' ')}</Badge>
-                    </div>
-                  </TableCell>
-                  <TableCell>{m.description || m.reference || '-'}</TableCell>
-                  <TableCell className="text-right font-medium" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(m.amount)}</TableCell>
-                  <TableCell><Badge variant="outline" className="text-[10px]">{m.status}</Badge></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <DataTable
+        data={filteredMovements}
+        columns={columns}
+        total={filteredMovements.length}
+        page={page}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={(s) => { setPageSize(s); setPage(0); }}
+        searchValue={search}
+        onSearchChange={(v) => { setSearch(v); setPage(0); }}
+        searchPlaceholder={lang === 'id' ? 'Cari deskripsi, ref, tanggal...' : 'Search description, ref, date...'}
+        filters={[
+          { key: 'type', label: lang === 'id' ? 'Tipe' : 'Type', value: typeFilter, onChange: (v) => { setTypeFilter(v); setPage(0); }, options: [
+            { value: 'cash_in', label: 'Cash In' },
+            { value: 'cash_out', label: 'Cash Out' },
+          ]},
+        ]}
+        emptyTitle={lang === 'id' ? 'Belum ada pergerakan kas' : 'No cash movements'}
+        emptyDescription={lang === 'id' ? 'Pergerakan kas akan tampil di sini' : 'Cash movements will appear here'}
+      />
     </div>
   );
 }
