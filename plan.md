@@ -15,8 +15,9 @@
 - Menjadikan **Cashier Portal, Kitchen Portal, Warehouse Portal** sebagai sumber data operasional yang mengalir ke kontrol outlet (closing) dan monitoring (management/executive).
 - Menjadikan **Executive Portal** sebagai **premium interactive dashboard** (prioritas saat ini):
   - UI modern (glass premium) dengan **hybrid accent** (teal primary + electric blue accent khusus Executive)
-  - Interaksi advanced: **period presets + compare**, KPI drill-over sheet, chart datapoint drill-down dialog, outlet leaderboard drill, deep-link ke halaman relevan
-  - Real-time insight: WebSocket pulse + refresh KPI pada event penting
+  - Interaksi advanced: **period presets + compare**, KPI drill-over Sheet, chart datapoint drill-down Dialog, outlet leaderboard drill, deep-link ke halaman relevan
+  - Konsistensi komponen reusable untuk seluruh halaman Executive (Overview/Revenue/Expenses/Outlets/Control Tower)
+  - Real-time insight: WebSocket pulse + refresh KPI pada event penting (**DEFERRED ke EXEC-3 untuk full wiring**)
 - Menutup gap production readiness:
   - Onboarding aman (invite flow) + password policy + 2FA TOTP
   - Warehouse governance (advanced transfer workflow)
@@ -40,7 +41,9 @@
 >   - **T2.3 Notification Center (WebSocket): COMPLETE**
 >   - **T2.2 Advanced Warehouse Workflows: COMPLETE**
 > - Documentation repository `/app/docs`: **COMPLETE** (TDD, Tracker, Backlog)
-> - Upcoming work now reprioritized: **Executive Portal Dashboard Premium Upgrade** (3 phase)
+> - Executive Portal Dashboard Premium Upgrade:
+>   - **Phase EXEC-1: COMPLETE**
+>   - **Phase EXEC-2: NEXT (in progress target)**
 > - Midtrans QRIS: **DEFERRED** sampai API keys production tersedia
 
 ---
@@ -207,82 +210,86 @@ Acceptance criteria — Met.
 > - Data: **Real DB** (tanpa mock tambahan)
 > - Design spec: sudah ditambahkan ke `/app/design_guidelines.md` ("Executive Dashboard — Premium Interactive Guidelines")
 
-### Phase EXEC-1: Foundation + Overview Flagship (P0)
+### Phase EXEC-1: Foundation + Overview Flagship (P0) — ✅ COMPLETED
 **Goal:** bangun fondasi komponen premium reusable + jadikan **ExecOverview** sebagai flagship interaktif.
 
-Frontend:
-- Tambah exec accent tokens ke `/app/frontend/src/index.css` untuk `.dark` & `.light`:
+Delivered (Frontend):
+- Exec accent tokens ditambahkan ke `/app/frontend/src/index.css` untuk `.dark` & `.light`:
   - `--exec-accent-blue`, `--exec-accent-blue-soft`, `--exec-accent-glow`, `--exec-ring`, `--exec-grid`, `--exec-positive/negative/warning`
-- Buat shared components di `/app/frontend/src/components/executive/`:
-  - `PremiumPeriodPicker.js` (preset pills + custom range popover + compare toggle)
-  - `InteractiveKpiCard.js` (value + trend + sparkline + click → Sheet)
-  - `KpiDetailSheet.js` (Sheet metric detail + breakdown chart + list + CTA "View Full Report")
-  - `DatapointDrilldownDialog.js` (Dialog breakdown saat click datapoint)
-  - `ChartTooltip.js` (custom glass tooltip untuk Recharts)
-  - `OutletLeaderboardCard.js` + `OutletDrilldownDialog.js`
-  - `CountUpNumber.js` (animasi angka halus; respect prefers-reduced-motion)
-- Refactor `/executive/overview` (`ExecOverview.js`) menggunakan komponen di atas:
-  - Period presets + compare toggle
-  - KPI cards klik → Sheet detail + deep link
-  - Chart datapoint klik → drilldown dialog
-  - Leaderboard outlet teaser klik → outlet dialog
+  - Helper classes/animations: `.exec-kpi-pulse`, `.exec-tooltip-surface`, reduced-motion handling
+- Shared components dibuat di `/app/frontend/src/components/executive/`:
+  - `formatters.js`
+  - `CountUpNumber.js`
+  - `ChartTooltip.js`
+  - `PremiumPeriodPicker.js`
+  - `InteractiveKpiCard.js`
+  - `KpiDetailSheet.js`
+  - `DatapointDrilldownDialog.js`
+  - `OutletLeaderboardCard.js`
+  - `OutletDrilldownDialog.js`
+- `ExecOverview.js` full refactor:
+  - Period presets + custom range + compare toggle
+  - KPI cards klik → KPI Detail Sheet
+  - Chart hover → glass tooltip, click datapoint → drilldown dialog
+  - Outlet leaderboard klik → outlet profile dialog
+  - Dark/light mode visual verified
 
-Backend:
-- Tambah endpoints untuk mendukung drill-down yang real:
-  - `GET /api/executive/kpi-detail` (metric + period + outlet scope → breakdown series + top contributors)
-  - `GET /api/executive/datapoint-breakdown` (metric + date + scope → daftar transaksi/journals)
-  - `GET /api/executive/outlet-profile` (outlet_id + period → multi-metric + series)
-- WebSocket integration:
-  - Emit event `exec.kpi.refresh` dari posting/approval/closing/alerts agar frontend melakukan debounced refetch + pulse
+Delivered (Backend):
+- 3 endpoint baru (real data, teruji):
+  - `GET /api/executive/kpi-detail`
+  - `GET /api/executive/datapoint-breakdown`
+  - `GET /api/executive/outlet-profile`
 
 Testing:
-- Frontend compile + lint
-- Manual click-flow: KPI sheet, chart drilldown dialog, leaderboard drill
-- Visual QA (screenshot quick review) untuk dark/light
+- Manual screenshot verification: semua interaksi bekerja (sheet/dialog/tooltip/drill)
+- Backend testing agent: **26/26 passed**, 0 regressions, 0 bugs (`/app/test_reports/iteration_8.json`)
 
-Acceptance criteria:
-- Overview terasa premium dan interaktif: semua widget bisa drill-down
-- Period presets + compare bekerja konsisten
-- Tidak ada hardcoded hex di komponen Exec (hanya CSS vars)
+Acceptance criteria: Met.
 
 ---
 
-### Phase EXEC-2: Revenue + Expense + Outlets Analytics (P0)
+### Phase EXEC-2: Revenue + Expense + Outlets Analytics (P0) — NEXT
 **Goal:** rebuild 3 halaman analytics agar setara kualitas dengan Overview dan konsisten komponen.
 
-Frontend:
+Frontend (rebuild to premium interactive):
 - `ExecRevenue.js`:
   - Trend (day/week/month toggle)
   - Channel split donut (cash/card/online)
-  - Hourly heatmap / day-of-week breakdown
-  - Top items + outlet ranking by revenue
-  - Semua chart & list clickable → drilldown dialog/profile
+  - Hourly breakdown + day-of-week breakdown (visualisasi interaktif)
+  - Top items (revenue contribution) + outlet ranking by revenue
+  - Semua chart & list clickable → drilldown dialog/profile (reuse `DatapointDrilldownDialog`, `OutletDrilldownDialog`)
+  - Period picker + compare toggle konsisten (reuse `PremiumPeriodPicker`)
 - `ExecExpenses.js`:
   - Category donut + center metric
-  - Trend vs budget overlay (jika budget tersedia)
+  - Expense trend + compare (prev period) dan persiapan overlay vs budget (jika budget tersedia)
   - Top expense outlets
-  - Drilldown per category
+  - Drilldown per category → dialog (list transaksi petty cash / journals)
 - `ExecOutlets.js`:
   - Multi-metric leaderboard (revenue/margin/closing/waste) via tab pills
   - Outlet comparison matrix
   - Click → outlet profile dialog + deep link
 
-Backend:
-- `GET /api/executive/revenue-detail` (hourly, day-of-week, top items, by outlet)
-- `GET /api/executive/expense-vs-budget` (join budget; jika budget belum versioned gunakan current approved)
-- `GET /api/executive/outlet-matrix` (multi-metric comparison)
+Backend (new analytics endpoints):
+- `GET /api/executive/revenue-detail`
+  - hourly series, day-of-week series, top items, by outlet breakdown
+- `GET /api/executive/expense-vs-budget`
+  - join budget (sementara pakai current approved jika budget versioning belum ada)
+- `GET /api/executive/outlet-matrix`
+  - multi-metric comparison per outlet untuk matrix view
 
 Testing:
 - Regression basic routing + loading states
 - Drilldown dialog data correctness (spot-check)
+- Testing agent setelah endpoint baru + halaman besar selesai
 
 Acceptance criteria:
-- Revenue/Expense/Outlets halaman interaktif penuh (drill-down parity)
-- Konsistensi period picker & compare antar halaman
+- Revenue/Expense/Outlets halaman interaktif penuh (drill-down parity dengan Overview)
+- Konsistensi period picker + compare antar halaman
+- Responsif desktop-first, tetap usable di tablet
 
 ---
 
-### Phase EXEC-3: Control Tower + Realtime Polish (P0)
+### Phase EXEC-3: Control Tower + Realtime Polish (P0) — UPCOMING
 **Goal:** Control Tower menjadi command center realtime + polish menyeluruh (states, a11y, perf).
 
 Frontend:
@@ -297,6 +304,7 @@ Frontend:
 
 Backend:
 - Pastikan event emit konsisten pada approvals/alerts/closing
+- Implement wiring event `exec.kpi.refresh` end-to-end (posting/approval/closing/alerts → WS → frontend debounced refetch + pulse)
 - (Opsional) endpoint ringkas untuk Control Tower aggregates agar render cepat
 
 Polish:
@@ -320,13 +328,13 @@ Acceptance criteria:
 ---
 
 ## 3) Next Actions (immediate)
-1) Mulai **Phase EXEC-1** (Foundation + Overview Flagship).
-2) Setelah EXEC-1 stabil, lanjut **EXEC-2** (Revenue/Expenses/Outlets).
-3) Lanjut **EXEC-3** (Control Tower + realtime polish) + jalankan testing agent.
+1) Mulai **Phase EXEC-2** (Revenue/Expenses/Outlets) — rebuild UI + tambah endpoints analytics.
+2) Setelah EXEC-2 stabil, lanjut **EXEC-3** (Control Tower + realtime WS wiring) + jalankan testing agent.
 
 Deferred:
 - Midtrans QRIS integration — menunggu API keys production.
 - Budget Versioning (P2) — setelah dashboard exec stabil (karena akan mempengaruhi expense-vs-budget dan variance views).
+- Server-side pagination wiring (Stock Movements, POS Orders) — nice-to-have dari Phase 1D.
 
 ---
 
@@ -341,7 +349,7 @@ Deferred:
 - Executive Portal menjadi **premium interactive cockpit**:
   - Period presets + compare tersedia di semua halaman prioritas
   - Semua KPI/Chart/List punya drill-down (Sheet/Dialog) + deep-link
-  - Realtime updates via WebSocket dengan pulse (debounced)
+  - Realtime updates via WebSocket dengan pulse (debounced) — complete pada EXEC-3
   - UI konsisten dark/light, glass premium, cepat, dan accessible
 - Production readiness tetap terjaga:
   - Invite onboarding + password policy + session audit + 2FA
