@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Backend API Testing for T2.3 Notification Center + T2.2 Advanced Warehouse Workflows
+Backend API Testing for EXEC-1 Executive Portal Endpoints
 F&B ERP System - Lusi & Pakan
 """
 import requests
@@ -21,6 +21,7 @@ class LusiPakanAPITester:
         
         # Test data
         self.test_outlet_id = None
+        self.test_outlet_ids = []
         self.test_po_id = None
         self.test_adjustment_id = None
         self.test_notification_id = None
@@ -91,6 +92,319 @@ class LusiPakanAPITester:
             print(f"   Logged in as: {self.current_user.get('name', 'Unknown')}")
             return True
         return False
+
+    def setup_test_data(self):
+        """Setup test data - get outlet IDs"""
+        print("\n" + "="*60)
+        print("SETTING UP TEST DATA")
+        print("="*60)
+        
+        # Get outlets for testing
+        success, response = self.run_test(
+            "Get outlets for testing",
+            "GET",
+            "core/outlets",
+            200
+        )
+        
+        if success and response.get('outlets'):
+            self.test_outlet_ids = [outlet['id'] for outlet in response['outlets']]
+            self.test_outlet_id = self.test_outlet_ids[0] if self.test_outlet_ids else None
+            print(f"   Found {len(self.test_outlet_ids)} outlets for testing")
+            for outlet in response['outlets']:
+                print(f"   - {outlet['name']} (ID: {outlet['id']})")
+            return True
+        else:
+            print("❌ No outlets found for testing")
+            return False
+
+    def test_exec1_auth_requirements(self):
+        """Test EXEC-1 auth requirements - endpoints should require Bearer token"""
+        print("\n" + "="*60)
+        print("TESTING EXEC-1 AUTH REQUIREMENTS")
+        print("="*60)
+        
+        # Store current token and remove it
+        original_token = self.token
+        self.token = None
+        
+        # Test endpoints without token (should return 401 or 403)
+        endpoints_to_test = [
+            "executive/kpi-detail",
+            "executive/datapoint-breakdown", 
+            "executive/outlet-profile",
+            "executive/overview"
+        ]
+        
+        all_passed = True
+        for endpoint in endpoints_to_test:
+            success, response = self.run_test(
+                f"EXEC-1 Auth: {endpoint} without token (should get 403)",
+                "GET",
+                endpoint,
+                403  # FastAPI returns 403 for "Not authenticated"
+            )
+            if not success:
+                all_passed = False
+        
+        # Restore token
+        self.token = original_token
+        return all_passed
+
+    def test_exec1_kpi_detail_endpoint(self):
+        """Test EXEC-1 KPI Detail endpoint with various metrics and options"""
+        print("\n" + "="*60)
+        print("TESTING EXEC-1 KPI DETAIL ENDPOINT")
+        print("="*60)
+        
+        # Test all supported metrics
+        metrics = ["revenue", "gross_profit", "expenses", "cash_sales", "card_sales", "online_sales"]
+        all_passed = True
+        
+        # First test with default date range (should have real data)
+        success, response = self.run_test(
+            "EXEC-1: GET kpi-detail metric=revenue (default dates)",
+            "GET",
+            "executive/kpi-detail?metric=revenue",
+            200
+        )
+        
+        if success:
+            print(f"   ✅ Default range revenue: Total = Rp {response.get('total', 0):,.2f}, Contributors = {len(response.get('top_contributors', []))}")
+        
+        for metric in metrics:
+            # Test basic metric without compare (use broader date range for real data)
+            success, response = self.run_test(
+                f"EXEC-1: GET kpi-detail metric={metric}",
+                "GET",
+                f"executive/kpi-detail?metric={metric}&date_from=2024-02-01&date_to=2024-04-30",
+                200
+            )
+            
+            if success:
+                # Validate response structure
+                required_fields = ["metric", "period", "total", "series", "top_contributors"]
+                for field in required_fields:
+                    if field not in response:
+                        print(f"   ❌ Missing field '{field}' in response")
+                        all_passed = False
+                
+                if response.get("metric") != metric:
+                    print(f"   ❌ Expected metric '{metric}', got '{response.get('metric')}'")
+                    all_passed = False
+                
+                print(f"   ✅ {metric}: Total = Rp {response.get('total', 0):,.2f}, Contributors = {len(response.get('top_contributors', []))}")
+            else:
+                all_passed = False
+        
+        # Test with compare=true
+        success, response = self.run_test(
+            "EXEC-1: GET kpi-detail with compare=true",
+            "GET",
+            "executive/kpi-detail?metric=revenue&date_from=2024-03-01&date_to=2024-03-31&compare=true",
+            200
+        )
+        
+        if success:
+            if "compare_total" not in response or "trend_pct" not in response:
+                print("   ❌ Missing compare fields in response")
+                all_passed = False
+            else:
+                print(f"   ✅ Compare: Current = Rp {response.get('total', 0):,.2f}, Previous = Rp {response.get('compare_total', 0):,.2f}, Trend = {response.get('trend_pct', 0)}%")
+        else:
+            all_passed = False
+        
+        # Test with outlet filter
+        if self.test_outlet_id:
+            success, response = self.run_test(
+                "EXEC-1: GET kpi-detail with outlet filter",
+                "GET",
+                f"executive/kpi-detail?metric=revenue&outlet_id={self.test_outlet_id}&date_from=2024-03-01&date_to=2024-03-31",
+                200
+            )
+            
+            if success:
+                print(f"   ✅ Outlet filter: Total = Rp {response.get('total', 0):,.2f}")
+            else:
+                all_passed = False
+        
+        return all_passed
+
+    def test_exec1_datapoint_breakdown_endpoint(self):
+        """Test EXEC-1 Datapoint Breakdown endpoint"""
+        print("\n" + "="*60)
+        print("TESTING EXEC-1 DATAPOINT BREAKDOWN ENDPOINT")
+        print("="*60)
+        
+        all_passed = True
+        
+        # Test revenue breakdown for a specific date
+        success, response = self.run_test(
+            "EXEC-1: GET datapoint-breakdown metric=revenue",
+            "GET",
+            "executive/datapoint-breakdown?metric=revenue&date=2024-03-15",
+            200
+        )
+        
+        if success:
+            required_fields = ["metric", "date", "total", "count", "rows"]
+            for field in required_fields:
+                if field not in response:
+                    print(f"   ❌ Missing field '{field}' in response")
+                    all_passed = False
+            
+            if response.get("metric") != "revenue":
+                print(f"   ❌ Expected metric 'revenue', got '{response.get('metric')}'")
+                all_passed = False
+            
+            print(f"   ✅ Revenue breakdown: Total = Rp {response.get('total', 0):,.2f}, Rows = {response.get('count', 0)}")
+            
+            # Check row structure
+            rows = response.get('rows', [])
+            if rows:
+                row = rows[0]
+                required_row_fields = ["time", "outlet", "source", "amount", "reference"]
+                for field in required_row_fields:
+                    if field not in row:
+                        print(f"   ❌ Missing field '{field}' in row structure")
+                        all_passed = False
+        else:
+            all_passed = False
+        
+        # Test expenses breakdown
+        success, response = self.run_test(
+            "EXEC-1: GET datapoint-breakdown metric=expenses",
+            "GET",
+            "executive/datapoint-breakdown?metric=expenses&date=2024-03-15",
+            200
+        )
+        
+        if success:
+            print(f"   ✅ Expenses breakdown: Total = Rp {response.get('total', 0):,.2f}, Rows = {response.get('count', 0)}")
+        else:
+            all_passed = False
+        
+        # Test with outlet filter
+        if self.test_outlet_id:
+            success, response = self.run_test(
+                "EXEC-1: GET datapoint-breakdown with outlet filter",
+                "GET",
+                f"executive/datapoint-breakdown?metric=revenue&date=2024-03-15&outlet_id={self.test_outlet_id}",
+                200
+            )
+            
+            if success:
+                print(f"   ✅ Outlet filter breakdown: Total = Rp {response.get('total', 0):,.2f}, Rows = {response.get('count', 0)}")
+            else:
+                all_passed = False
+        
+        return all_passed
+
+    def test_exec1_outlet_profile_endpoint(self):
+        """Test EXEC-1 Outlet Profile endpoint"""
+        print("\n" + "="*60)
+        print("TESTING EXEC-1 OUTLET PROFILE ENDPOINT")
+        print("="*60)
+        
+        all_passed = True
+        
+        # Test with valid outlet_id
+        if self.test_outlet_id:
+            success, response = self.run_test(
+                "EXEC-1: GET outlet-profile with valid outlet_id",
+                "GET",
+                f"executive/outlet-profile?outlet_id={self.test_outlet_id}&date_from=2024-03-01&date_to=2024-03-31",
+                200
+            )
+            
+            if success:
+                required_fields = ["outlet_id", "outlet_name", "city", "period", "metrics", "trend", "recent_alerts"]
+                for field in required_fields:
+                    if field not in response:
+                        print(f"   ❌ Missing field '{field}' in response")
+                        all_passed = False
+                
+                # Check metrics structure
+                metrics = response.get('metrics', {})
+                required_metrics = ["revenue", "expenses", "profit", "margin_pct", "waste_value", "closing_rate", "closed_days", "total_days"]
+                for metric in required_metrics:
+                    if metric not in metrics:
+                        print(f"   ❌ Missing metric '{metric}' in metrics")
+                        all_passed = False
+                
+                print(f"   ✅ Valid outlet profile: {response.get('outlet_name')} - Revenue: Rp {metrics.get('revenue', 0):,.2f}, Margin: {metrics.get('margin_pct', 0)}%")
+                print(f"      Trend points: {len(response.get('trend', []))}, Recent alerts: {len(response.get('recent_alerts', []))}")
+            else:
+                all_passed = False
+        
+        # Test with invalid outlet_id (should return empty metrics)
+        success, response = self.run_test(
+            "EXEC-1: GET outlet-profile with invalid outlet_id",
+            "GET",
+            "executive/outlet-profile?outlet_id=invalid_id_12345&date_from=2024-03-01&date_to=2024-03-31",
+            200
+        )
+        
+        if success:
+            metrics = response.get('metrics', {})
+            if metrics.get('revenue', 0) == 0 and metrics.get('expenses', 0) == 0:
+                print(f"   ✅ Invalid outlet_id returns empty metrics as expected")
+            else:
+                print(f"   ❌ Invalid outlet_id should return empty metrics")
+                all_passed = False
+        else:
+            all_passed = False
+        
+        # Test without outlet_id (should return empty)
+        success, response = self.run_test(
+            "EXEC-1: GET outlet-profile without outlet_id",
+            "GET",
+            "executive/outlet-profile?date_from=2024-03-01&date_to=2024-03-31",
+            200
+        )
+        
+        if success:
+            if response.get('metrics') == {} and response.get('trend') == [] and response.get('recent_alerts') == []:
+                print(f"   ✅ No outlet_id returns empty response as expected")
+            else:
+                print(f"   ❌ No outlet_id should return empty response")
+                all_passed = False
+        else:
+            all_passed = False
+        
+        return all_passed
+
+    def test_exec1_existing_endpoints_regression(self):
+        """Test existing executive endpoints still work (regression test)"""
+        print("\n" + "="*60)
+        print("TESTING EXEC-1 EXISTING ENDPOINTS REGRESSION")
+        print("="*60)
+        
+        existing_endpoints = [
+            ("executive/overview", "Executive Overview"),
+            ("executive/revenue-trend", "Revenue Trend"),
+            ("executive/alerts-summary", "Alerts Summary"),
+            ("executive/inventory-health", "Inventory Health"),
+            ("executive/outlet-ranking", "Outlet Ranking")
+        ]
+        
+        all_passed = True
+        
+        for endpoint, name in existing_endpoints:
+            success, response = self.run_test(
+                f"EXEC-1 Regression: {name}",
+                "GET",
+                f"{endpoint}?date_from=2024-03-01&date_to=2024-03-31",
+                200
+            )
+            
+            if success:
+                print(f"   ✅ {name} endpoint working")
+            else:
+                print(f"   ❌ {name} endpoint failed")
+                all_passed = False
+        
+        return all_passed
 
     def test_t23_notifications_basic(self):
         """Test T2.3 Notification Center basic endpoints"""
@@ -729,7 +1043,7 @@ class LusiPakanAPITester:
     def run_all_tests(self):
         """Run all tests"""
         print("🚀 Starting F&B ERP Backend API Tests")
-        print("Testing T2.3 Notification Center + T2.2 Advanced Warehouse Workflows")
+        print("Testing EXEC-1 Executive Portal Endpoints")
         print("="*80)
         
         # Login as superadmin
@@ -737,20 +1051,17 @@ class LusiPakanAPITester:
             print("❌ Failed to login as superadmin")
             return 1
         
-        # Run T2.3 tests
-        self.test_t23_notifications_basic()
-        self.test_t23_notifications_superadmin()
-        self.test_t23_notifications_rbac()
-        self.test_t23_notifications_read_operations()
-        self.test_t23_alerts_emit_hooks()
+        # Setup test data
+        if not self.setup_test_data():
+            print("❌ Failed to setup test data")
+            return 1
         
-        # Run T2.2 tests
-        self.test_t22_warehouse_settings()
-        self.test_t22_purchase_orders_workflow()
-        self.test_t22_po_receive_workflow()
-        self.test_t22_adjustment_threshold()
-        self.test_t22_adjustment_approve_reject()
-        self.test_t22_attachments_gridfs()
+        # Run EXEC-1 tests
+        self.test_exec1_auth_requirements()
+        self.test_exec1_kpi_detail_endpoint()
+        self.test_exec1_datapoint_breakdown_endpoint()
+        self.test_exec1_outlet_profile_endpoint()
+        self.test_exec1_existing_endpoints_regression()
         
         # Print results
         print("\n" + "="*80)

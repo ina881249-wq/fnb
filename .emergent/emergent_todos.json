@@ -1,18 +1,26 @@
 [
   {
-    "content": "Create /app/docs/ folder + README index",
+    "content": "Add exec accent CSS tokens to index.css (dark + light)",
     "status": "completed"
   },
   {
-    "content": "Generate Technical Design Document (21 sections A-U)",
+    "content": "Create shared exec components",
     "status": "completed"
   },
   {
-    "content": "Generate Development Tracker (14 sections A-N)",
+    "content": "Add backend endpoints: kpi-detail, datapoint-breakdown, outlet-profile + WS emit hook",
     "status": "completed"
   },
   {
-    "content": "Generate Enhancement Backlog (10 sections A-J)",
+    "content": "Refactor ExecOverview.js to use new components with full interactivity",
+    "status": "completed"
+  },
+  {
+    "content": "Test Phase EXEC-1: compile, click-flow, screenshot dark/light",
+    "status": "completed"
+  },
+  {
+    "content": "Backend testing via testing agent (new endpoints kpi-detail, datapoint-breakdown, outlet-profile)",
     "status": "in_progress"
   }
 ]

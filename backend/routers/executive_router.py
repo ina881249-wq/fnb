@@ -3,7 +3,8 @@ from database import (
     sales_summaries_col, cash_movements_col, petty_cash_col,
     stock_on_hand_col, items_col, outlets_col, accounts_col,
     approvals_col, alerts_col, daily_closings_col, reconciliations_col,
-    stock_movements_col, inventory_conversions_col, journals_col
+    stock_movements_col, inventory_conversions_col, journals_col,
+    journal_lines_col
 )
 from auth import get_current_user
 from utils.audit import serialize_doc
@@ -392,4 +393,328 @@ async def inventory_health(current_user: dict = Depends(get_current_user), outle
         "low_stock_count": low_stock,
         "health_score": round(((total_items - low_stock) / max(total_items, 1)) * 100, 1),
         "by_category": categories,
+    }
+
+
+# =============================================================================
+# EXEC-1 Additional Endpoints: KPI Detail / Datapoint Drilldown / Outlet Profile
+# =============================================================================
+
+def _default_period(date_from: str, date_to: str):
+    now = datetime.now(timezone.utc)
+    if not date_to:
+        date_to = now.strftime("%Y-%m-%d")
+    if not date_from:
+        date_from = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    return date_from, date_to
+
+
+def _previous_period(date_from: str, date_to: str):
+    d_from = parse_date(date_from)
+    d_to = parse_date(date_to)
+    if not d_from or not d_to:
+        return "", ""
+    span = (d_to - d_from).days
+    prev_to = d_from - timedelta(days=1)
+    prev_from = prev_to - timedelta(days=span)
+    return prev_from.strftime("%Y-%m-%d"), prev_to.strftime("%Y-%m-%d")
+
+
+async def _series_for_metric(metric: str, date_from: str, date_to: str, outlet_id: str = ""):
+    """Return [{date, value}] series for a metric."""
+    q = {"date": {"$gte": date_from, "$lte": date_to}}
+    if outlet_id:
+        q["outlet_id"] = outlet_id
+
+    series = {}
+
+    if metric in ("revenue", "cash_sales", "card_sales", "online_sales", "gross_profit"):
+        async for s in sales_summaries_col.find(q).sort("date", 1):
+            d = s.get("date", "")
+            if d not in series:
+                series[d] = 0.0
+            if metric == "revenue":
+                series[d] += s.get("total_sales", 0)
+            elif metric == "cash_sales":
+                series[d] += s.get("cash_sales", 0)
+            elif metric == "card_sales":
+                series[d] += s.get("card_sales", 0)
+            elif metric == "online_sales":
+                series[d] += s.get("online_sales", 0)
+            elif metric == "gross_profit":
+                series[d] += s.get("total_sales", 0)  # refined below
+        if metric == "gross_profit":
+            async for p in petty_cash_col.find(q):
+                d = p.get("date", "")
+                if d in series:
+                    series[d] -= p.get("amount", 0)
+    elif metric == "expenses":
+        async for p in petty_cash_col.find(q).sort("date", 1):
+            d = p.get("date", "")
+            series[d] = series.get(d, 0) + p.get("amount", 0)
+    elif metric == "cashflow_in":
+        async for m in cash_movements_col.find({**q, "type": "cash_in"}):
+            d = m.get("date", "")
+            series[d] = series.get(d, 0) + m.get("amount", 0)
+    elif metric == "cashflow_out":
+        async for m in cash_movements_col.find({**q, "type": {"$ne": "cash_in"}}):
+            d = m.get("date", "")
+            series[d] = series.get(d, 0) + m.get("amount", 0)
+
+    return [{"date": k, "value": round(v, 2)} for k, v in sorted(series.items())]
+
+
+async def _contributors_for_metric(metric: str, date_from: str, date_to: str, outlet_id: str = "", limit: int = 5):
+    """Return top outlets contributing to the metric."""
+    contributors = []
+
+    # Scope all outlets if no outlet filter; else just that outlet (still show as single entry)
+    outlet_ids = []
+    if outlet_id:
+        outlet_ids = [outlet_id]
+    else:
+        async for o in outlets_col.find({"status": "active"}):
+            outlet_ids.append(str(o["_id"]))
+
+    for oid in outlet_ids:
+        oq = {"outlet_id": oid, "date": {"$gte": date_from, "$lte": date_to}}
+        outlet = await outlets_col.find_one({"_id": ObjectId(oid)}) if ObjectId.is_valid(oid) else None
+        name = outlet.get("name", "Unknown") if outlet else "Unknown"
+
+        value = 0.0
+        if metric in ("revenue", "cash_sales", "card_sales", "online_sales"):
+            async for s in sales_summaries_col.find(oq):
+                if metric == "revenue":
+                    value += s.get("total_sales", 0)
+                elif metric == "cash_sales":
+                    value += s.get("cash_sales", 0)
+                elif metric == "card_sales":
+                    value += s.get("card_sales", 0)
+                elif metric == "online_sales":
+                    value += s.get("online_sales", 0)
+        elif metric == "expenses":
+            async for p in petty_cash_col.find(oq):
+                value += p.get("amount", 0)
+        elif metric == "gross_profit":
+            rev = 0.0
+            exp = 0.0
+            async for s in sales_summaries_col.find(oq):
+                rev += s.get("total_sales", 0)
+            async for p in petty_cash_col.find(oq):
+                exp += p.get("amount", 0)
+            value = rev - exp
+
+        if value != 0:
+            contributors.append({"label": name, "value": round(value, 2), "outlet_id": oid})
+
+    contributors.sort(key=lambda x: abs(x["value"]), reverse=True)
+    total_abs = sum(abs(c["value"]) for c in contributors) or 1
+    for c in contributors[:limit]:
+        c["pct"] = round(abs(c["value"]) / total_abs * 100, 2)
+    return contributors[:limit]
+
+
+@router.get("/kpi-detail")
+async def kpi_detail(
+    current_user: dict = Depends(get_current_user),
+    metric: str = "revenue",
+    date_from: str = "",
+    date_to: str = "",
+    outlet_id: str = "",
+    compare: bool = False,
+):
+    """Detail breakdown for a KPI metric — used by Executive KPI detail sheet."""
+    date_from, date_to = _default_period(date_from, date_to)
+
+    series = await _series_for_metric(metric, date_from, date_to, outlet_id)
+    total = sum(s["value"] for s in series)
+
+    compare_series = []
+    compare_total = None
+    if compare:
+        prev_from, prev_to = _previous_period(date_from, date_to)
+        if prev_from and prev_to:
+            compare_series = await _series_for_metric(metric, prev_from, prev_to, outlet_id)
+            compare_total = sum(s["value"] for s in compare_series)
+            # Merge into series as `compare` field aligned by relative day index
+            for i, item in enumerate(series):
+                item["compare"] = compare_series[i]["value"] if i < len(compare_series) else None
+
+    trend_pct = None
+    if compare_total is not None and compare_total > 0:
+        trend_pct = round((total - compare_total) / compare_total * 100, 2)
+
+    contributors = await _contributors_for_metric(metric, date_from, date_to, outlet_id, limit=8)
+
+    return {
+        "metric": metric,
+        "period": {"from": date_from, "to": date_to},
+        "total": round(total, 2),
+        "compare_total": round(compare_total, 2) if compare_total is not None else None,
+        "trend_pct": trend_pct,
+        "series": series,
+        "top_contributors": contributors,
+    }
+
+
+@router.get("/datapoint-breakdown")
+async def datapoint_breakdown(
+    current_user: dict = Depends(get_current_user),
+    metric: str = "revenue",
+    date: str = "",
+    outlet_id: str = "",
+):
+    """Breakdown of a single datapoint — list individual transactions / journal entries."""
+    if not date:
+        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    rows = []
+    total = 0.0
+
+    if metric in ("revenue", "cash_sales", "card_sales", "online_sales"):
+        q = {"date": date}
+        if outlet_id:
+            q["outlet_id"] = outlet_id
+        async for s in sales_summaries_col.find(q):
+            outlet = await outlets_col.find_one({"_id": ObjectId(s["outlet_id"])}) if s.get("outlet_id") and ObjectId.is_valid(s["outlet_id"]) else None
+            amount = 0.0
+            if metric == "revenue":
+                amount = s.get("total_sales", 0)
+            elif metric == "cash_sales":
+                amount = s.get("cash_sales", 0)
+            elif metric == "card_sales":
+                amount = s.get("card_sales", 0)
+            elif metric == "online_sales":
+                amount = s.get("online_sales", 0)
+            if amount:
+                rows.append({
+                    "time": date,
+                    "outlet": outlet.get("name", "") if outlet else "-",
+                    "source": "Sales Summary",
+                    "amount": amount,
+                    "reference": s.get("id") or str(s.get("_id", "")),
+                })
+                total += amount
+    elif metric == "expenses":
+        q = {"date": date}
+        if outlet_id:
+            q["outlet_id"] = outlet_id
+        async for p in petty_cash_col.find(q).sort("created_at", -1):
+            outlet = await outlets_col.find_one({"_id": ObjectId(p["outlet_id"])}) if p.get("outlet_id") and ObjectId.is_valid(p["outlet_id"]) else None
+            amount = p.get("amount", 0)
+            rows.append({
+                "time": p.get("created_at", "")[:19].replace("T", " ") if isinstance(p.get("created_at"), str) else date,
+                "outlet": outlet.get("name", "") if outlet else "-",
+                "source": p.get("category", "Petty Cash"),
+                "amount": amount,
+                "reference": p.get("description", "")[:60],
+            })
+            total += amount
+    else:
+        # Fallback: pull journals posted on this date
+        q = {"posting_date": date, "status": "posted"}
+        if outlet_id:
+            q["outlet_id"] = outlet_id
+        async for j in journals_col.find(q).sort("posting_date", -1).limit(100):
+            outlet = await outlets_col.find_one({"_id": ObjectId(j["outlet_id"])}) if j.get("outlet_id") and ObjectId.is_valid(j["outlet_id"]) else None
+            # Total journal debit
+            total_amt = 0
+            async for line in journal_lines_col.find({"journal_id": str(j.get("_id") or j.get("id", ""))}):
+                total_amt += line.get("debit", 0)
+            rows.append({
+                "time": j.get("posting_date", ""),
+                "outlet": outlet.get("name", "") if outlet else "-",
+                "source": j.get("source_type", "journal"),
+                "amount": total_amt,
+                "reference": j.get("journal_number", ""),
+            })
+            total += total_amt
+
+    return {
+        "metric": metric,
+        "date": date,
+        "outlet_id": outlet_id,
+        "total": round(total, 2),
+        "count": len(rows),
+        "rows": rows,
+    }
+
+
+@router.get("/outlet-profile")
+async def outlet_profile(
+    current_user: dict = Depends(get_current_user),
+    outlet_id: str = "",
+    date_from: str = "",
+    date_to: str = "",
+):
+    """Detailed profile of a single outlet for drill-down dialog."""
+    if not outlet_id:
+        return {"metrics": {}, "trend": [], "recent_alerts": []}
+    date_from, date_to = _default_period(date_from, date_to)
+
+    sales_q = {"outlet_id": outlet_id, "date": {"$gte": date_from, "$lte": date_to}}
+    revenue = 0.0
+    trend_map = {}
+    async for s in sales_summaries_col.find(sales_q).sort("date", 1):
+        d = s.get("date", "")
+        amt = s.get("total_sales", 0)
+        revenue += amt
+        trend_map[d] = trend_map.get(d, 0) + amt
+
+    expenses = 0.0
+    async for p in petty_cash_col.find(sales_q):
+        expenses += p.get("amount", 0)
+
+    profit = revenue - expenses
+    margin_pct = (profit / revenue * 100) if revenue > 0 else 0
+
+    # Waste value
+    waste_value = 0.0
+    async for m in stock_movements_col.find({"outlet_id": outlet_id, "type": {"$in": ["waste", "spoilage"]}}):
+        if ObjectId.is_valid(m.get("item_id", "")):
+            item = await items_col.find_one({"_id": ObjectId(m["item_id"])})
+            if item:
+                waste_value += abs(m.get("quantity", 0)) * item.get("cost_per_unit", 0)
+
+    # Closing compliance
+    days_range = ((parse_date(date_to) or datetime.now(timezone.utc)) - (parse_date(date_from) or datetime.now(timezone.utc))).days + 1
+    closed_days = await daily_closings_col.count_documents({
+        "outlet_id": outlet_id,
+        "status": "locked",
+        "date": {"$gte": date_from, "$lte": date_to},
+    })
+    closing_rate = (closed_days / max(days_range, 1)) * 100
+
+    # Recent alerts for outlet
+    recent_alerts = []
+    async for a in alerts_col.find({"outlet_id": outlet_id, "resolved": False}).sort("created_at", -1).limit(8):
+        doc = serialize_doc(a)
+        recent_alerts.append({
+            "title": doc.get("title", ""),
+            "priority": doc.get("priority", "low"),
+            "type": doc.get("alert_type", ""),
+            "created_at": doc.get("created_at"),
+        })
+
+    outlet = await outlets_col.find_one({"_id": ObjectId(outlet_id)}) if ObjectId.is_valid(outlet_id) else None
+
+    trend = [{"date": k, "value": round(v, 2)} for k, v in sorted(trend_map.items())]
+
+    return {
+        "outlet_id": outlet_id,
+        "outlet_name": outlet.get("name", "") if outlet else "",
+        "city": outlet.get("city", "") if outlet else "",
+        "period": {"from": date_from, "to": date_to},
+        "metrics": {
+            "revenue": round(revenue, 2),
+            "expenses": round(expenses, 2),
+            "profit": round(profit, 2),
+            "margin_pct": round(margin_pct, 2),
+            "waste_value": round(waste_value, 2),
+            "closing_rate": round(closing_rate, 2),
+            "closed_days": closed_days,
+            "total_days": days_range,
+        },
+        "trend": trend,
+        "recent_alerts": recent_alerts,
     }

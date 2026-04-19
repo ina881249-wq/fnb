@@ -39,6 +39,20 @@
   --glass-shadow-soft: 0 10px 30px rgba(0,0,0,0.35);
   --sidebar-width: 280px;
   --topbar-height: 56px;
+  /* Executive Portal accent (hybrid: primary teal + electric blue accent) */
+  --exec-accent-blue: 214 95% 62%;
+  --exec-accent-blue-soft: 214 95% 62% / 0.18;
+  --exec-accent-glow: 214 95% 62% / 0.35;
+  --exec-ring: 214 95% 62%;
+  --exec-grid: 214 40% 60% / 0.10;
+  --exec-marker: 214 95% 62%;
+  --exec-positive: 142 72% 48%;
+  --exec-negative: 0 72% 58%;
+  --exec-warning: 43 92% 58%;
+  --exec-card-radius: 1.05rem;
+  --exec-hover-bg: rgba(255,255,255,0.085);
+  --exec-hover-border: rgba(255,255,255,0.18);
+  --exec-glow-shadow: 0 18px 60px rgba(0,0,0,0.55), 0 0 0 1px hsl(214 95% 62% / 0.18);
 }
 
 /* ========== LIGHT THEME ========== */
@@ -76,6 +90,20 @@
   --glass-shadow-soft: 0 4px 16px rgba(0,0,0,0.05);
   --sidebar-width: 280px;
   --topbar-height: 56px;
+  /* Executive Portal accent — light mode tuning */
+  --exec-accent-blue: 214 95% 50%;
+  --exec-accent-blue-soft: 214 95% 50% / 0.12;
+  --exec-accent-glow: 214 95% 50% / 0.22;
+  --exec-ring: 214 95% 50%;
+  --exec-grid: 214 40% 40% / 0.12;
+  --exec-marker: 214 95% 50%;
+  --exec-positive: 142 62% 40%;
+  --exec-negative: 0 68% 50%;
+  --exec-warning: 43 92% 48%;
+  --exec-card-radius: 1.05rem;
+  --exec-hover-bg: rgba(15,23,42,0.04);
+  --exec-hover-border: rgba(15,23,42,0.12);
+  --exec-glow-shadow: 0 8px 32px rgba(0,0,0,0.08), 0 0 0 1px hsl(214 95% 50% / 0.14);
 }
 
 body {
@@ -83,6 +111,41 @@ body {
   font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+
+/* ========== Executive Portal helpers ========== */
+.exec-portal-scope {
+  /* scope marker — future-proof if we need to scope overrides */
+}
+
+@keyframes exec-pulse {
+  0% { box-shadow: 0 0 0 0 hsl(var(--exec-ring) / 0.55); }
+  70% { box-shadow: 0 0 0 10px hsl(var(--exec-ring) / 0); }
+  100% { box-shadow: 0 0 0 0 hsl(var(--exec-ring) / 0); }
+}
+.exec-kpi-pulse {
+  animation: exec-pulse 900ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes exec-marker-pulse {
+  0%, 100% { opacity: 0.9; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+.exec-marker-pulse { animation: exec-marker-pulse 1600ms ease-in-out infinite; }
+
+/* Floating glass tooltip */
+.exec-tooltip-surface {
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border-strong);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: var(--glass-shadow);
+  border-radius: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .exec-kpi-pulse, .exec-marker-pulse { animation: none; }
 }
 
 h1, h2, h3, h4, h5, h6 {
