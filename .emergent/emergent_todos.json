@@ -1,6 +1,18 @@
 [
   {
-    "content": "Tier 2 All Complete: T2.1/T2.1-Plus/T2.3/T2.2",
+    "content": "Create /app/docs/ folder + README index",
     "status": "completed"
+  },
+  {
+    "content": "Generate Technical Design Document (21 sections A-U)",
+    "status": "completed"
+  },
+  {
+    "content": "Generate Development Tracker (14 sections A-N)",
+    "status": "completed"
+  },
+  {
+    "content": "Generate Enhancement Backlog (10 sections A-J)",
+    "status": "in_progress"
   }
 ]
