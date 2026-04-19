@@ -6,7 +6,7 @@ import { Button } from '../../components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { Badge } from '../../components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../components/ui/dialog';
 import { Switch } from '../../components/ui/switch';
 import { Label } from '../../components/ui/label';
 import { FileSpreadsheet, FileText, Database, BookOpen, CheckCircle2, AlertCircle, Settings, GitBranch, Wallet, TrendingUp, ArrowDownUp } from 'lucide-react';
@@ -683,6 +683,9 @@ export default function ReportsPage() {
         <DialogContent className="bg-[var(--glass-bg-strong)] border-[var(--glass-border)] backdrop-blur-2xl max-w-xl" data-testid="backfill-dialog">
           <DialogHeader>
             <DialogTitle className="text-sm" style={{ fontFamily: 'Space Grotesk' }}>Journal Coverage &amp; Backfill</DialogTitle>
+            <DialogDescription className="text-xs text-[hsl(var(--muted-foreground))]">
+              Status jurnal yang sudah diposting per kategori transaksi.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 text-sm">
             <p className="text-xs text-[hsl(var(--muted-foreground))]">

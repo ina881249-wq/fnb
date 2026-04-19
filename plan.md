@@ -407,7 +407,7 @@ Acceptance criteria — Met.
 ## Tier 2 Enhancements — Control-Grade Finance + Ops Governance (IN PROGRESS)
 **User confirmed order:** **T2.1 → T2.3 → T2.2**
 
-### T2.1 (P1) — Journal-Driven Reporting (Full Refactor) — **COMPLETE**
+### T2.1 (P1) — Journal-Driven Reporting (Full Refactor) — **COMPLETE + ENHANCED (T2.1-Plus)**
 **Goal:** P&L, Cashflow, Balance Sheet dihitung **100% dari `journals` + `journal_lines`** (status `posted`) sebagai single source of truth.
 
 #### Rationale / Current gap
@@ -483,6 +483,33 @@ Acceptance criteria — Met.
 - Testing iteration_5.json: **90%** overall (backend 92.5%, frontend 85%). No critical bugs.
   - Trial Balance balanced (Debit = Credit). Balance Sheet balanced (A = L + E).
   - Outlet-scoped RBAC verified (manager outlet_access mengurangi journal_count).
+
+#### T2.1-Plus Enhancements (Finance Reports Excellence) — **COMPLETE**
+User requested perlengkapi + modernisasi visualisasi finance reports. Delivered:
+
+**Backend additions:**
+- `/api/reports/equity-changes` — Statement of Changes in Equity / Laporan Perubahan Ekuitas (beginning snapshot + period movement + ending snapshot + waterfall rows).
+- `/api/reports/financial-ratios` — 20+ ratios: gross/net/operating margin, current/cash ratio, debt-to-equity, equity ratio, ROA/ROE (annualized), cashflow margin, daily/monthly burn rate, runway months.
+- `/api/reports/revenue-trend` — bucketed trend (day/week/month) dengan revenue/cogs/expense/net_profit per bucket.
+
+**Frontend — Major UI Overhaul (`ReportsPage.js`):**
+- **Financial Ratios KPI bar** di atas laporan: 8 metrik dengan ikon, tooltip penjelasan, dan warna threshold.
+- **Period Picker** dengan preset (Hari Ini, Kemarin, Minggu/Lalu, Bulan/Lalu, Kuartal/Lalu, YTD, Tahun Lalu, 30/90 Hari Terakhir, Custom) + manual date range.
+- **Compare toggle** untuk membandingkan periode saat ini vs periode sebelumnya (auto-hitung prev. range); P&L cards menampilkan badge delta `↑ X% vs prev.`.
+- **6 Tabs Indonesia**: Laba Rugi, Neraca, Perubahan Ekuitas, Arus Kas, Trial Balance, Inventory Val.
+- **Advanced Visualizations** (`ReportCharts.js`):
+  - `WaterfallChart` untuk P&L bridge (Revenue → COGS → GP → OpEx → Net Profit) dan Equity bridge (Beginning → Movements → Ending).
+  - `RevenueExpenseTrend` — stacked area dengan line overlay untuk net profit.
+  - `CompositionDonut` — revenue by outlet, balance sheet composition, cashflow by category.
+  - `CashflowArea` — daily inflow/outflow + net line.
+  - `RunningBalance` — area chart saldo kas berjalan.
+  - `AssetTreemap` — komposisi asset per akun.
+  - `ComparisonBars` — current vs previous period bars.
+- **Drill-down GL Modal** (`GeneralLedgerModal.js`): klik baris akun apa saja → modal menampilkan semua journal lines untuk akun itu dengan tanggal/jurnal/deskripsi/source + pagination.
+- **Journal Coverage Dialog** untuk superadmin (backfill trigger + visualisasi coverage).
+- A11y: DialogDescription ditambahkan untuk semua modal.
+
+Testing iteration_6.json: **98% overall** (backend 96.2%, frontend 100% — 16/16 features passed). No critical bugs.
 
 ---
 

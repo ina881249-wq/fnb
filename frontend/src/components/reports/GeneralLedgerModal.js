@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api/client';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -55,6 +55,9 @@ export default function GeneralLedgerModal({ open, onClose, accountId, accountLa
             <ArrowRightLeft className="w-4 h-4 text-cyan-400" />
             General Ledger — {data?.account?.code || ''} {data?.account?.name || accountLabel}
           </DialogTitle>
+          <DialogDescription className="text-xs text-[hsl(var(--muted-foreground))]">
+            Seluruh mutasi debit/credit untuk akun ini dalam periode terpilih.
+          </DialogDescription>
         </DialogHeader>
         {loading && <p className="text-xs text-[hsl(var(--muted-foreground))]">Loading...</p>}
         {data && (
