@@ -47,10 +47,10 @@
 > - **Tier-1 E2 Real-time Kitchen WebSocket: COMPLETE**
 > - **Tier-1 E3 Server-side pagination readiness: COMPLETE (backend-ready; UI wired where needed)**
 > - **Tier-1 E1 Hardware Integration (ESC/POS + cash drawer + print fallback): COMPLETE**
-> - **Tier 2 Enhancements: IN PROGRESS**
->   - **T2.1 Journal-Driven Reporting: COMPLETE** (iteration_5 90% pass, no critical bugs)
->   - T2.3 Notification Center: NOT STARTED
->   - T2.2 Advanced Warehouse Workflows: NOT STARTED
+> - **Tier 2 Enhancements: ALL COMPLETE (except Midtrans waiting for keys)**
+>   - **T2.1 Journal-Driven Reporting: COMPLETE** (iteration_5 90%, iteration_6 T2.1-Plus 98%)
+>   - **T2.3 Notification Center: COMPLETE** (iteration_7 Backend 96% / Frontend 90%)
+>   - **T2.2 Advanced Warehouse Workflows: COMPLETE** (PO workflow + configurable threshold + GridFS attachments)
 > - Midtrans QRIS: **DEFERRED** sampai API keys production tersedia (tidak di-mock)
 > - Latest testing: `iteration_4.json` — **no critical bugs**
 

@@ -1,14 +1,6 @@
 [
   {
-    "content": "T2.3 Notification Center — COMPLETE",
+    "content": "Tier 2 All Complete: T2.1/T2.1-Plus/T2.3/T2.2",
     "status": "completed"
-  },
-  {
-    "content": "T2.2a-e Advanced Warehouse Workflows — COMPLETE (PO, threshold, attachments, settings)",
-    "status": "completed"
-  },
-  {
-    "content": "Test T2.3 + T2.2 end-to-end via testing agent",
-    "status": "in_progress"
   }
 ]
