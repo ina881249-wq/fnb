@@ -47,7 +47,10 @@
 > - **Tier-1 E2 Real-time Kitchen WebSocket: COMPLETE**
 > - **Tier-1 E3 Server-side pagination readiness: COMPLETE (backend-ready; UI wired where needed)**
 > - **Tier-1 E1 Hardware Integration (ESC/POS + cash drawer + print fallback): COMPLETE**
-> - **Tier 2 Enhancements: NOT STARTED** (order confirmed: **T2.1 → T2.3 → T2.2**)
+> - **Tier 2 Enhancements: IN PROGRESS**
+>   - **T2.1 Journal-Driven Reporting: COMPLETE** (iteration_5 90% pass, no critical bugs)
+>   - T2.3 Notification Center: NOT STARTED
+>   - T2.2 Advanced Warehouse Workflows: NOT STARTED
 > - Midtrans QRIS: **DEFERRED** sampai API keys production tersedia (tidak di-mock)
 > - Latest testing: `iteration_4.json` — **no critical bugs**
 
@@ -401,10 +404,10 @@ Acceptance criteria — Met.
 
 ---
 
-## Tier 2 Enhancements — Control-Grade Finance + Ops Governance (PLANNED; NOT STARTED)
+## Tier 2 Enhancements — Control-Grade Finance + Ops Governance (IN PROGRESS)
 **User confirmed order:** **T2.1 → T2.3 → T2.2**
 
-### T2.1 (P1) — Journal-Driven Reporting (Full Refactor)
+### T2.1 (P1) — Journal-Driven Reporting (Full Refactor) — **COMPLETE**
 **Goal:** P&L, Cashflow, Balance Sheet dihitung **100% dari `journals` + `journal_lines`** (status `posted`) sebagai single source of truth.
 
 #### Rationale / Current gap
@@ -453,6 +456,33 @@ Acceptance criteria — Met.
 - P&L, Cashflow, Balance Sheet dapat dihitung untuk periode apa pun **tanpa membaca `sales_summaries`**.
 - Trial Balance seimbang (total debit ≈ total credit).
 - UI Reports tampil cepat (aggregation indexed; gunakan pipeline + `$group`).
+
+#### Delivered Summary
+- `utils/posting_service.py` diperluas dengan 3 handler baru: `post_sales_summary_journal`, `post_petty_cash_journal`, `post_cash_movement_journal` (idempotent via `_already_posted`).
+- Auto-journal hook aktif pada:
+  - `finance_router.create_sales_summary` (manual outlet input)
+  - `cashier_router` close-shift (generate sales_summary)
+  - `finance_router.create_petty_cash` (existing + kini juga konsisten)
+  - `finance_router.create_cash_movement` (existing)
+- Admin router baru: `POST /api/admin/journals/backfill` + `GET /api/admin/journals/coverage` (superadmin only, idempotent).
+- `reports_router.py` sepenuhnya di-refactor:
+  - `/api/reports/pnl` — grouping by COA type (revenue/contra/cogs/expense), plus revenue_by_outlet, breakdown per akun.
+  - `/api/reports/cashflow` — debit/credit ke 1110/1120/1130, kategorisasi operating/financing/investing, daily chart, inflow/outflow breakdown.
+  - `/api/reports/balance-sheet` — assets/liabilities/equity beserta `retained_earnings_current_period` + balance_check.
+  - `/api/reports/trial-balance` — semua akun + totals + `is_balanced` flag.
+  - `/api/reports/general-ledger` — per-account ledger dengan pagination.
+- Frontend `ReportsPage.js` total rewrite:
+  - Tab baru **Trial Balance** dengan banner Balanced/Unbalanced.
+  - Badge **Journal-driven** + journal_count di setiap tab.
+  - Filter periode (Dari/Sampai) yang live-update semua laporan.
+  - Dialog **Journal Coverage** + tombol Run Backfill (superadmin).
+  - Balance Sheet breakdown per-account + balance_check banner.
+  - Cashflow: Operating/Financing/Investing cards + inflow/outflow breakdown tables.
+- Export updated untuk balance-sheet & trial-balance format baru.
+- Backfill berhasil dijalankan pada seed "Lusi & Pakan" (296 journals baru → 299 total posted).
+- Testing iteration_5.json: **90%** overall (backend 92.5%, frontend 85%). No critical bugs.
+  - Trial Balance balanced (Debit = Credit). Balance Sheet balanced (A = L + E).
+  - Outlet-scoped RBAC verified (manager outlet_access mengurangi journal_count).
 
 ---
 
