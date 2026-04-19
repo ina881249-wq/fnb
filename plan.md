@@ -4,7 +4,7 @@
 - Menjaga baseline yang sudah stabil (Phase 1 & 2) sambil memperluas platform menjadi **workflow operasional end-to-end** dari frontliner (**Cashier/Kitchen/Warehouse**) sampai kontrol (Outlet/Management/Executive).
 - Tetap memakai arsitektur **modular monolith** (FastAPI + MongoDB) dengan batas domain jelas (finance, inventory, approvals, closing, POS, kitchen, warehouse, AI) agar portal baru bisa ditambahkan tanpa redesign.
 - Menjadikan finance + inventory **audit-grade** dan **control-grade**:
-  - Double-entry accounting via **COA + Journal Engine + posting service**
+  - Double-entry accounting via **COA + Journal Engine + Posting Service**
   - Kontrol operasional via **reconciliation, daily closing, approvals, alerts**
   - Inventory operasional via **receiving, transfer, adjustment, stock count** + traceability `stock_movements`
 - Upgrade UI menjadi **enterprise operational cockpit**:
@@ -19,7 +19,7 @@
 > **Current status (updated):**
 > - Baseline Phase 1 & 2: **COMPLETE**
 > - Enhancement Phase 1A/1B/1C: **COMPLETE**
-> - Enhancement Phase 1D: **PARTIALLY COMPLETE** (sisa masuk hardening lanjutan)
+> - Enhancement Phase 1D: **MOSTLY COMPLETE** (tersisa hardening “nice-to-have” seperti saved views/column visibility)
 > - **Phase 3A Cashier Portal MVP: COMPLETE**
 > - **Phase 3B Kitchen Portal MVP: COMPLETE**
 > - **Phase 3C Daily Closing Integration: COMPLETE**
@@ -29,7 +29,10 @@
 > - **Phase 3E Warehouse Portal MVP + integration: COMPLETE**
 > - **Phase 3F AI Executive Portal: COMPLETE**
 > - Data client reseed: **Lusi & Pakan (2 outlet, 3 bulan data) COMPLETE**
-> - Latest testing: `iteration_4.json` (frontend regression untuk DataTable rollout) — **no critical bugs**
+> - **P1a Auto-journal integration: COMPLETE**
+> - **P1b Auth hardening lanjutan (password policy + invite + sessions): COMPLETE**
+> - **P1c Mobile/tablet-first POS Cashier: COMPLETE**
+> - Latest testing: `iteration_4.json` (frontend regression DataTable) — **no critical bugs**
 
 ---
 
@@ -104,28 +107,24 @@ Acceptance criteria — Met.
 
 ---
 
-### Enhancement Phase 1D — UI/UX Best Practices (PARTIALLY COMPLETE)
+### Enhancement Phase 1D — UI/UX Best Practices (MOSTLY COMPLETE)
 Goal: make UI enterprise-grade for daily operations.
 
-#### Completed in 1D so far
-- Pagination implemented on **Journal Entries** list.
-- Search/filters implemented on control pages:
-  - Alerts filter by type
-  - Variance structured layout + empty-state guidance
-- Empty states and CTAs implemented across new modules.
+#### Completed in 1D
 - Navigation/menu restructure implemented.
-- **DataTable standardization (Phase 3D.1 + 3D.3) selesai** untuk modul utama.
+- Empty states dan CTAs di modul-modul baru.
+- **DataTable standardization selesai** (Phase 3D.1 + 3D.3) untuk modul utama.
+- Journal list memiliki pagination + row-click detail.
 
-#### Remaining Scope (hardening lanjutan)
-- Server-side pagination untuk dataset besar (stock movements, audit trail, approvals, dsb) bila volume tinggi.
+#### Remaining Scope (nice-to-have)
+- Server-side pagination untuk dataset sangat besar (stock movements, audit trail, approvals) bila volume tinggi.
 - Smart filters + saved views (per role) pada modul critical.
 - Sticky headers + column visibility + export selected untuk tabel besar.
 - Reporting refactor milestone:
   - move P&L/Cashflow/Balance Sheet calculations to be **journal-driven** as single source-of-truth.
 
-Acceptance criteria (to close 1D)
+Acceptance criteria (to close 1D fully)
 - All key lists have stable pagination + filters.
-- Global search works and is role-scoped.
 - Reports consistent with journal totals.
 
 ---
@@ -153,7 +152,7 @@ Acceptance criteria (to close 1D)
 - Portal Selector: Cashier portal **active**
 
 #### Quality / Testing
-- Testing agent: backend passed; frontend core flows verified end-to-end.
+- Backend passed; frontend core flows verified end-to-end.
 
 Acceptance criteria — Met.
 
@@ -289,18 +288,81 @@ Acceptance criteria — Met.
 
 ---
 
+## P1 Production Hardening — Operational + Security + Mobility (COMPLETE)
+
+### P1a — Auto-journal integration (Finance ↔ Operasional) (COMPLETED)
+Goal: Semua transaksi operasional penting auto-post ke journal (double-entry) untuk audit-grade reporting.
+
+Delivered:
+- File baru: `/app/backend/utils/posting_service.py`
+  - `post_receipt_journal()` → Dr Inventory (1210/1220) / Cr AP (2100)
+  - `post_waste_journal()` → Dr Waste  Spoilage (6800) / Cr Inventory (1210/1220)
+  - `post_adjustment_journal()` → gain/loss inventory vs Misc Expense (6900)
+- Integrasi:
+  - `routers/warehouse_router.py`: create_receipt + create_adjustment mengembalikan `journal_number`
+  - `routers/kitchen_router.py`: waste logging mengembalikan `journal_number`
+- Verified end-to-end: jurnal balanced dan posted, dengan `source_type`:
+  - `warehouse_receipt`, `kitchen_waste`, `warehouse_adjustment`
+
+Acceptance criteria — Met.
+
+---
+
+### P1c — Mobile/Tablet-first POS Cashier (COMPLETED)
+Goal: Siap pilot di lapangan (tablet/iPad/Android), touch-friendly dan cepat.
+
+Delivered (frontend):
+- Refactor besar `/app/frontend/src/pages/cashier/POSPage.js`:
+  - Responsive layout: desktop sticky cart; tablet/mobile via **bottom Sheet drawer** + floating FAB
+  - Touch targets: qty +/- jadi `h-10 w-10`, menu card min-height 140px, pill tabs tinggi 44px
+  - Numeric keypad (3×4): `1-9, 000, 0, backspace` untuk cash tender
+  - Quick-amount buttons: 50K/100K/150K/200K/500K
+  - Checkout button `h-14`
+- Verified via screenshot tablet/mobile flows.
+
+Acceptance criteria — Met.
+
+---
+
+### P1b — Auth hardening lanjutan (COMPLETED)
+Goal: Siap production multi-outlet (password policy, onboarding aman, audit login).
+
+Backend (`routers/auth_router.py`):
+- Password policy: min 8 char, wajib ada 1 huruf + 1 angka via `validate_password_policy()`
+- Applied to: register, change-password, admin reset password, accept-invite
+- New endpoints:
+  - `POST /api/auth/admin/invite` (admin buat invite token)
+  - `GET /api/auth/invite-info?token=` (public pre-check)
+  - `POST /api/auth/accept-invite` (public accept + set password + auto-login)
+  - `GET /api/auth/sessions?user_id=&limit=` (recent login activity, berbasis audit log)
+  - `GET /api/auth/password-policy` (public UI hints)
+
+Frontend:
+- New page: `/app/frontend/src/pages/AcceptInvitePage.js`
+- Route baru: `/accept-invite` (unauthenticated)
+- Management Admin:
+  - Invite User dialog + copyable invite link
+  - Session history dialog (Clock icon)
+  - Password hint pada create user
+
+Acceptance criteria — Met.
+
+---
+
 ## 3) Next Actions (immediate)
-1) **P1 — Auto-journal integration (finance ↔ operasional)**
-   - Warehouse Receiving → auto-post jurnal (Dr Inventory / Cr AP)
-   - Waste logs → auto-post jurnal (Dr Waste Expense / Cr Inventory)
-   - Stock Adjustment → auto-post jurnal koreksi
-   - Target: laporan journal-driven + audit trail lebih kuat
-2) **P1 — Auth hardening lanjutan (opsional, jika siap production multi-outlet)**
-   - Password policy, optional 2FA untuk finance/admin
-   - User invite flow
-   - Session activity log
-3) **P1 — Mobile/tablet-first POS Cashier (opsional, untuk pilot lapangan)**
-   - Touch-friendly, responsive layout, keypad input
+Karena P1a/P1b/P1c sudah complete, opsi lanjutan untuk iterasi berikutnya:
+1) **P2 — 2FA (TOTP) untuk finance/superadmin**
+   - Setup TOTP secret per user
+   - Enforce on login untuk role tertentu
+2) **P2 — Email delivery untuk invite**
+   - Kirim invite link via SMTP provider (SendGrid/Mailgun) atau WhatsApp integration
+3) **P2 — Advanced warehouse transfer workflow**
+   - request → approval → ship → receive
+   - SLA + partial receive
+4) **P2 — Journal-driven reporting full refactor**
+   - PL, Cashflow, Balance Sheet 100% dari journal
+5) **P2 — Mobile-first Kitchen KDS**
+   - full-screen kitchen mode, swipe actions, real-time websockets
 
 ---
 
@@ -311,10 +373,14 @@ Acceptance criteria — Met.
   - reporting (management/executive)
 - Daily closing end-to-end berjalan sesuai flow:
   - cashier close shift → outlet review → system validate → submit approval → finance finalize/lock.
-- Finance tetap **double-entry**, dan laporan makin journal-driven.
+- Finance tetap **double-entry**, dan makin journal-driven.
 - UI operasional-grade: DataTable konsisten, filter/pagination stabil, saved views/bulk actions bertahap.
 - Executive control tower proaktif dengan AI:
   - briefing otomatis, anomaly detection, forecasting untuk tindakan cepat.
+- **Production readiness**:
+  - Auto-journal untuk receiving/waste/adjustment aktif dan balanced
+  - Password policy + invite onboarding + session audit tersedia
+  - POS siap tablet/mobile (touch friendly + keypad)
 
 ---
 

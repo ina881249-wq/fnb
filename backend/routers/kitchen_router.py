@@ -10,6 +10,7 @@ from database import (
 from auth import get_current_user, check_outlet_access
 from utils.audit import log_audit, serialize_doc
 from utils.helpers import now_utc
+from utils.posting_service import post_waste_journal
 from websocket_manager import ws_manager
 
 router = APIRouter(prefix="/api/kitchen", tags=["kitchen"])
@@ -199,7 +200,16 @@ async def create_waste(req: WasteCreateRequest, current_user: dict = Depends(get
     await log_audit(current_user["id"], "create", "kitchen", "waste_log", str(result.inserted_id),
                     details=f"{req.item_name} x{req.quantity} {req.uom} - {req.reason}")
     await ws_manager.broadcast_all({"type": "kitchen_waste_logged", "outlet_id": req.outlet_id, "waste_id": str(result.inserted_id)})
-    return {"id": str(result.inserted_id), "message": "Waste logged", "cost": cost}
+
+    # Auto-post journal (Dr Waste 6800 / Cr Inventory)
+    journal_number = None
+    if req.item_id and cost > 0:
+        doc_for_post = {**doc, "_id": result.inserted_id, "cost_impact": cost}
+        journal_result = await post_waste_journal(doc_for_post, current_user["id"])
+        if journal_result:
+            journal_number = journal_result["journal_number"]
+
+    return {"id": str(result.inserted_id), "message": "Waste logged", "cost": cost, "journal_number": journal_number}
 
 
 @router.get("/waste")

@@ -18,6 +18,7 @@ from database import (
 from auth import get_current_user, check_outlet_access
 from utils.audit import log_audit, serialize_doc
 from utils.helpers import now_utc
+from utils.posting_service import post_receipt_journal, post_adjustment_journal
 from websocket_manager import ws_manager
 
 router = APIRouter(prefix="/api/warehouse", tags=["warehouse"])
@@ -164,7 +165,13 @@ async def create_receipt(req: ReceiptCreate, current_user: dict = Depends(get_cu
     await log_audit(current_user["id"], "create", "warehouse", "receipt", str(result.inserted_id),
                     details=f"{receipt_number} — {len(req.lines)} items, total {total_value:,.0f}")
     await ws_manager.broadcast_all({"type": "warehouse_receipt_created", "receipt_number": receipt_number, "outlet_id": req.outlet_id})
-    return {"id": str(result.inserted_id), "receipt_number": receipt_number, "total_value": total_value}
+
+    # Auto-post journal (Dr Inventory / Cr AP)
+    doc_for_post = {**doc, "_id": result.inserted_id}
+    journal_result = await post_receipt_journal(doc_for_post, current_user["id"])
+    journal_number = journal_result["journal_number"] if journal_result else None
+
+    return {"id": str(result.inserted_id), "receipt_number": receipt_number, "total_value": total_value, "journal_number": journal_number}
 
 
 @router.get("/receipts")
@@ -423,7 +430,13 @@ async def create_adjustment(req: AdjustmentCreate, current_user: dict = Depends(
 
     await log_audit(current_user["id"], "create", "warehouse", "adjustment", str(result.inserted_id),
                     details=f"{adj_number}: {len(req.lines)} items, reason: {req.reason}")
-    return {"id": str(result.inserted_id), "adjustment_number": adj_number}
+
+    # Auto-post journal (gain/loss vs Misc Expense)
+    doc_for_post = {**doc, "_id": result.inserted_id}
+    journal_result = await post_adjustment_journal(doc_for_post, current_user["id"])
+    journal_number = journal_result["journal_number"] if journal_result else None
+
+    return {"id": str(result.inserted_id), "adjustment_number": adj_number, "journal_number": journal_number}
 
 
 @router.get("/adjustments")
