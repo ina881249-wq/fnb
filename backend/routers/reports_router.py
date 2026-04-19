@@ -17,7 +17,7 @@ from database import (
 from auth import get_current_user
 from utils.audit import serialize_doc
 from bson import ObjectId
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import io
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
@@ -618,6 +618,321 @@ async def general_ledger(
         "lines": lines,
         "total": total,
     }
+
+
+# ============================================================================
+# Statement of Changes in Equity (Perubahan Ekuitas)
+# ============================================================================
+
+@router.get("/equity-changes")
+async def equity_changes(
+    current_user: dict = Depends(get_current_user),
+    outlet_id: str = "",
+    period_start: str = "",
+    period_end: str = "",
+):
+    """
+    Statement of Changes in Equity.
+    Shows beginning equity balance, additions (net profit or owner contributions),
+    deductions (losses, withdrawals/dividends), and ending equity balance.
+
+    Current period equity movement = Revenue - COGS - Expense (retained earnings impact).
+    Beginning equity = all equity account balances + retained earnings from BEFORE period_start.
+    """
+    # Beginning balance (as of period_start - 1 day, i.e. posted journals with posting_date < period_start)
+    beginning_q = {"status": "posted"}
+    beginning_q.update(await _get_outlet_scope(current_user, outlet_id))
+    if period_start:
+        beginning_q["posting_date"] = {"$lt": period_start}
+
+    # Period movement (within [period_start, period_end])
+    period_q = await _query_posted_journals(current_user, outlet_id, period_start, period_end)
+
+    coa_map = await _load_coa_map()
+
+    async def _equity_snapshot(journal_query):
+        journal_ids = await _collect_journal_ids(journal_query)
+        agg = await _aggregate_lines_by_account(journal_ids)
+        equity_balance = 0.0
+        contribution_balance = 0.0  # direct equity postings (e.g. owner capital)
+        revenue_total = 0.0
+        cogs_total = 0.0
+        expense_total = 0.0
+        equity_accounts = []
+        for acc_id, row in agg.items():
+            acc = coa_map.get(acc_id)
+            if not acc:
+                continue
+            atype = acc.get("account_type")
+            balance = _account_balance(row, acc.get("normal_balance", "debit"))
+            if atype == "equity":
+                equity_balance += balance
+                contribution_balance += balance
+                equity_accounts.append({
+                    "account_id": acc_id,
+                    "account_code": acc["code"],
+                    "account_name": acc["name"],
+                    "balance": round(balance, 2),
+                })
+            elif atype == "revenue":
+                revenue_total += balance
+            elif atype == "contra":
+                revenue_total -= balance
+            elif atype == "cogs":
+                cogs_total += balance
+            elif atype == "expense":
+                expense_total += balance
+        retained_earnings = revenue_total - cogs_total - expense_total
+        total_equity = equity_balance + retained_earnings
+        return {
+            "equity_contributions": round(contribution_balance, 2),
+            "equity_accounts": equity_accounts,
+            "revenue": round(revenue_total, 2),
+            "cogs": round(cogs_total, 2),
+            "expense": round(expense_total, 2),
+            "retained_earnings": round(retained_earnings, 2),
+            "total_equity": round(total_equity, 2),
+            "journal_count": len(journal_ids),
+        }
+
+    beginning = await _equity_snapshot(beginning_q) if period_start else {
+        "equity_contributions": 0, "equity_accounts": [],
+        "revenue": 0, "cogs": 0, "expense": 0, "retained_earnings": 0, "total_equity": 0,
+        "journal_count": 0,
+    }
+    period = await _equity_snapshot(period_q)
+
+    # Ending balance = beginning + period changes
+    ending_equity = beginning["total_equity"] + period["equity_contributions"] + period["retained_earnings"]
+
+    # Build timeline / waterfall rows
+    rows = [
+        {"label": "Beginning Balance", "amount": round(beginning["total_equity"], 2), "type": "start"},
+    ]
+    if period["equity_contributions"] != 0:
+        rows.append({"label": "Owner Contributions / Equity Postings", "amount": round(period["equity_contributions"], 2), "type": "add" if period["equity_contributions"] >= 0 else "sub"})
+    rows.append({"label": "Revenue", "amount": round(period["revenue"], 2), "type": "add"})
+    if period["cogs"] > 0:
+        rows.append({"label": "COGS", "amount": -round(period["cogs"], 2), "type": "sub"})
+    if period["expense"] > 0:
+        rows.append({"label": "Operating Expenses", "amount": -round(period["expense"], 2), "type": "sub"})
+    rows.append({"label": "Net Profit (Period)", "amount": round(period["retained_earnings"], 2), "type": "summary"})
+    rows.append({"label": "Ending Balance", "amount": round(ending_equity, 2), "type": "end"})
+
+    return {
+        "data_source": "journals",
+        "period_start": period_start,
+        "period_end": period_end,
+        "beginning": beginning,
+        "period": period,
+        "ending_equity": round(ending_equity, 2),
+        "net_change": round(ending_equity - beginning["total_equity"], 2),
+        "rows": rows,
+    }
+
+
+# ============================================================================
+# Financial Ratios
+# ============================================================================
+
+@router.get("/financial-ratios")
+async def financial_ratios(
+    current_user: dict = Depends(get_current_user),
+    outlet_id: str = "",
+    period_start: str = "",
+    period_end: str = "",
+):
+    """
+    Computes key financial ratios from P&L + Balance Sheet data:
+      - Profitability: Gross Margin %, Operating Margin %, Net Margin %
+      - Liquidity: Current Ratio (requires current asset/liability classification — simplified with cash+AR vs AP)
+      - Efficiency: Operating Expense Ratio (OpEx / Revenue)
+      - Equity: ROE approximation, Burn rate, Runway (months), Cash flow margin
+    """
+    # Reuse P&L + Balance Sheet computations
+    pnl = await pnl_report(current_user, outlet_id, period_start, period_end)
+    bs = await balance_sheet(current_user, period_end, outlet_id)
+    cf = await cashflow_report(current_user, outlet_id, period_start, period_end)
+
+    revenue = pnl.get("total_revenue", 0) or 0
+    cogs = pnl.get("total_cogs", 0) or 0
+    gross_profit = pnl.get("gross_profit", 0) or 0
+    opex = pnl.get("total_expenses", 0) or 0
+    net_profit = pnl.get("net_profit", 0) or 0
+
+    total_assets = bs.get("assets", {}).get("total", 0) or 0
+    total_liab = bs.get("liabilities", {}).get("total", 0) or 0
+    total_equity = bs.get("equity", {}).get("total", 0) or 0
+
+    # Identify current assets (cash + bank + petty + inventory + receivables)
+    current_assets = 0.0
+    cash_and_equivalents = 0.0
+    for a in bs.get("assets", {}).get("accounts", []):
+        code = a.get("account_code", "")
+        if code.startswith(("11", "12", "13")):  # cash/bank/inv/receivables
+            current_assets += a.get("balance", 0)
+        if code in ("1110", "1120", "1130"):
+            cash_and_equivalents += a.get("balance", 0)
+
+    current_liabilities = total_liab  # simplified — treat all as current for MVP
+
+    def _pct(num, den):
+        return round((num / den * 100), 2) if den else 0.0
+
+    def _ratio(num, den):
+        return round(num / den, 4) if den else 0.0
+
+    gross_margin = _pct(gross_profit, revenue)
+    operating_margin = _pct((gross_profit - opex), revenue)
+    net_margin = _pct(net_profit, revenue)
+    cogs_ratio = _pct(cogs, revenue)
+    opex_ratio = _pct(opex, revenue)
+
+    current_ratio = _ratio(current_assets, current_liabilities)
+    cash_ratio = _ratio(cash_and_equivalents, current_liabilities)
+    debt_to_equity = _ratio(total_liab, total_equity) if total_equity else 0
+    equity_ratio = _pct(total_equity, total_assets)
+
+    # Return on metrics (annualized approximation if period <12mo)
+    # Determine period in days
+    from datetime import datetime as _dt
+    days = 0
+    if period_start and period_end:
+        try:
+            d1 = _dt.strptime(period_start, "%Y-%m-%d")
+            d2 = _dt.strptime(period_end, "%Y-%m-%d")
+            days = max((d2 - d1).days + 1, 1)
+        except Exception:
+            days = 0
+    annualized_factor = (365.0 / days) if days > 0 else 1.0
+
+    roa = _pct(net_profit * annualized_factor, total_assets)
+    roe = _pct(net_profit * annualized_factor, total_equity)
+
+    # Burn rate = avg daily outflow (operating expenses + cogs)
+    daily_burn = round((opex + cogs) / max(days, 1), 2) if days > 0 else 0
+    net_cashflow = cf.get("net_cashflow", 0)
+    runway_months = 0
+    if daily_burn > 0 and net_cashflow < 0:
+        # use cash_and_equivalents / monthly burn
+        monthly_burn = daily_burn * 30
+        runway_months = round(cash_and_equivalents / monthly_burn, 1) if monthly_burn else 0
+    cashflow_margin = _pct(net_cashflow, revenue)
+
+    return {
+        "data_source": "journals",
+        "period_start": period_start,
+        "period_end": period_end,
+        "period_days": days,
+        "profitability": {
+            "gross_margin_pct": gross_margin,
+            "operating_margin_pct": operating_margin,
+            "net_margin_pct": net_margin,
+            "cogs_ratio_pct": cogs_ratio,
+            "opex_ratio_pct": opex_ratio,
+        },
+        "liquidity": {
+            "current_ratio": current_ratio,
+            "cash_ratio": cash_ratio,
+            "current_assets": round(current_assets, 2),
+            "current_liabilities": round(current_liabilities, 2),
+            "cash_and_equivalents": round(cash_and_equivalents, 2),
+        },
+        "solvency": {
+            "debt_to_equity": debt_to_equity,
+            "equity_ratio_pct": equity_ratio,
+            "total_liabilities": round(total_liab, 2),
+            "total_equity": round(total_equity, 2),
+            "total_assets": round(total_assets, 2),
+        },
+        "returns": {
+            "roa_pct": roa,
+            "roe_pct": roe,
+            "annualized_factor": round(annualized_factor, 2),
+        },
+        "cashflow_health": {
+            "cashflow_margin_pct": cashflow_margin,
+            "daily_burn_rate": daily_burn,
+            "monthly_burn_rate": round(daily_burn * 30, 2),
+            "runway_months": runway_months,
+            "net_cashflow": round(net_cashflow, 2),
+        },
+        "absolutes": {
+            "revenue": round(revenue, 2),
+            "cogs": round(cogs, 2),
+            "gross_profit": round(gross_profit, 2),
+            "opex": round(opex, 2),
+            "net_profit": round(net_profit, 2),
+        },
+    }
+
+
+# ============================================================================
+# Revenue Trend (for chart rendering — daily buckets)
+# ============================================================================
+
+@router.get("/revenue-trend")
+async def revenue_trend(
+    current_user: dict = Depends(get_current_user),
+    outlet_id: str = "",
+    period_start: str = "",
+    period_end: str = "",
+    granularity: str = "day",  # day, week, month
+):
+    """Return daily (or weekly/monthly) revenue/cogs/expense for trend charts."""
+    q = await _query_posted_journals(current_user, outlet_id, period_start, period_end)
+    coa_map = await _load_coa_map()
+
+    buckets = {}  # date_key -> {revenue, cogs, expense, net}
+
+    async for j in journals_col.find(q):
+        date = j.get("posting_date") or _iso_today()
+        # Granularity
+        if granularity == "month":
+            key = date[:7]  # YYYY-MM
+        elif granularity == "week":
+            # Week start (simple ISO week by date)
+            try:
+                dt = datetime.strptime(date, "%Y-%m-%d")
+                # Monday of the week
+                monday = dt - timedelta(days=dt.weekday())
+                key = monday.strftime("%Y-%m-%d")
+            except Exception:
+                key = date
+        else:
+            key = date
+        if key not in buckets:
+            buckets[key] = {"revenue": 0, "cogs": 0, "expense": 0}
+        jid = str(j["_id"])
+        async for line in journal_lines_col.find({"journal_id": jid}):
+            acc = coa_map.get(line.get("account_id"))
+            if not acc:
+                continue
+            atype = acc.get("account_type")
+            if atype == "revenue":
+                buckets[key]["revenue"] += (line.get("credit", 0) - line.get("debit", 0))
+            elif atype == "contra":
+                buckets[key]["revenue"] -= (line.get("debit", 0) - line.get("credit", 0))
+            elif atype == "cogs":
+                buckets[key]["cogs"] += (line.get("debit", 0) - line.get("credit", 0))
+            elif atype == "expense":
+                buckets[key]["expense"] += (line.get("debit", 0) - line.get("credit", 0))
+
+    data = []
+    for k, v in sorted(buckets.items()):
+        data.append({
+            "date": k,
+            "revenue": round(v["revenue"], 2),
+            "cogs": round(v["cogs"], 2),
+            "expense": round(v["expense"], 2),
+            "net_profit": round(v["revenue"] - v["cogs"] - v["expense"], 2),
+        })
+
+    return {
+        "granularity": granularity,
+        "data": data,
+    }
+
 
 
 # ============================================================================

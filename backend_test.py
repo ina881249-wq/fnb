@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Backend API Testing for F&B ERP Journal-Driven Reporting (Tier 2 Task T2.1)
+Backend API Testing for F&B ERP Journal-Driven Reporting (Tier 2 Task T2.1-Plus)
 
 Tests all journal-driven financial reports and admin endpoints:
 - Admin journal coverage and backfill
 - P&L, Cashflow, Balance Sheet, Trial Balance, General Ledger reports
+- NEW T2.1-Plus: Statement of Changes in Equity, Financial Ratios, Revenue Trend
 - Data consistency checks
 - Role-based access control
 """
@@ -422,6 +423,209 @@ class JournalReportingTester:
         else:
             self.log_test("Consistency check setup", False, "Could not get P&L or Balance Sheet")
 
+    def test_equity_changes_report(self):
+        """Test GET /api/reports/equity-changes (T2.1-Plus)"""
+        print("\n🔍 Testing Statement of Changes in Equity...")
+        
+        params = {
+            'period_start': '2026-01-01',
+            'period_end': '2026-04-19'
+        }
+        
+        response = self.api_request('GET', '/api/reports/equity-changes', self.superadmin_token, params=params)
+        if response and response.status_code == 200:
+            data = response.json()
+            
+            # Check data source
+            self.log_test("Equity Changes data source is journals", data.get('data_source') == 'journals')
+            
+            # Check required sections
+            has_beginning = 'beginning' in data
+            has_period = 'period' in data
+            has_ending_equity = 'ending_equity' in data
+            has_net_change = 'net_change' in data
+            has_rows = bool(data.get('rows'))
+            
+            self.log_test("Equity Changes has beginning balance", has_beginning)
+            self.log_test("Equity Changes has period data", has_period)
+            self.log_test("Equity Changes has ending equity", has_ending_equity)
+            self.log_test("Equity Changes has net change", has_net_change)
+            self.log_test("Equity Changes has rows array", has_rows)
+            
+            # Check rows structure (start, add, sub, summary, end)
+            rows = data.get('rows', [])
+            if rows:
+                row_types = [row.get('type') for row in rows]
+                has_start = 'start' in row_types
+                has_end = 'end' in row_types
+                has_summary = 'summary' in row_types
+                
+                self.log_test("Equity Changes has start row", has_start)
+                self.log_test("Equity Changes has end row", has_end)
+                self.log_test("Equity Changes has summary row", has_summary)
+            
+            # Check period data structure
+            period_data = data.get('period', {})
+            if period_data:
+                has_revenue = 'revenue' in period_data
+                has_cogs = 'cogs' in period_data
+                has_expense = 'expense' in period_data
+                has_retained_earnings = 'retained_earnings' in period_data
+                
+                self.log_test("Period data has revenue", has_revenue)
+                self.log_test("Period data has COGS", has_cogs)
+                self.log_test("Period data has expense", has_expense)
+                self.log_test("Period data has retained earnings", has_retained_earnings)
+            
+            print(f"   📊 Beginning Equity: Rp {data.get('beginning', {}).get('total_equity', 0):,.0f}")
+            print(f"   📊 Ending Equity: Rp {data.get('ending_equity', 0):,.0f}")
+            print(f"   📊 Net Change: Rp {data.get('net_change', 0):,.0f}")
+            print(f"   📊 Rows Count: {len(rows)}")
+        else:
+            self.log_test("Equity Changes report endpoint", False,
+                         f"Status: {response.status_code if response else 'No response'}")
+
+    def test_financial_ratios_report(self):
+        """Test GET /api/reports/financial-ratios (T2.1-Plus)"""
+        print("\n🔍 Testing Financial Ratios...")
+        
+        params = {
+            'period_start': '2026-01-01',
+            'period_end': '2026-04-19'
+        }
+        
+        response = self.api_request('GET', '/api/reports/financial-ratios', self.superadmin_token, params=params)
+        if response and response.status_code == 200:
+            data = response.json()
+            
+            # Check data source
+            self.log_test("Financial Ratios data source is journals", data.get('data_source') == 'journals')
+            
+            # Check required sections
+            has_profitability = 'profitability' in data
+            has_liquidity = 'liquidity' in data
+            has_solvency = 'solvency' in data
+            has_returns = 'returns' in data
+            has_cashflow_health = 'cashflow_health' in data
+            
+            self.log_test("Financial Ratios has profitability", has_profitability)
+            self.log_test("Financial Ratios has liquidity", has_liquidity)
+            self.log_test("Financial Ratios has solvency", has_solvency)
+            self.log_test("Financial Ratios has returns", has_returns)
+            self.log_test("Financial Ratios has cashflow health", has_cashflow_health)
+            
+            # Check profitability metrics
+            profitability = data.get('profitability', {})
+            if profitability:
+                has_gross_margin = 'gross_margin_pct' in profitability
+                has_net_margin = 'net_margin_pct' in profitability
+                has_opex_ratio = 'opex_ratio_pct' in profitability
+                
+                self.log_test("Profitability has gross margin %", has_gross_margin)
+                self.log_test("Profitability has net margin %", has_net_margin)
+                self.log_test("Profitability has OpEx ratio %", has_opex_ratio)
+            
+            # Check liquidity metrics
+            liquidity = data.get('liquidity', {})
+            if liquidity:
+                has_current_ratio = 'current_ratio' in liquidity
+                has_cash_and_equivalents = 'cash_and_equivalents' in liquidity
+                
+                self.log_test("Liquidity has current ratio", has_current_ratio)
+                self.log_test("Liquidity has cash and equivalents", has_cash_and_equivalents)
+            
+            # Check solvency metrics
+            solvency = data.get('solvency', {})
+            if solvency:
+                has_debt_to_equity = 'debt_to_equity' in solvency
+                
+                self.log_test("Solvency has debt to equity", has_debt_to_equity)
+            
+            # Check returns metrics
+            returns = data.get('returns', {})
+            if returns:
+                has_roa = 'roa_pct' in returns
+                has_roe = 'roe_pct' in returns
+                has_annualized_factor = 'annualized_factor' in returns
+                
+                self.log_test("Returns has ROA %", has_roa)
+                self.log_test("Returns has ROE %", has_roe)
+                self.log_test("Returns has annualized factor", has_annualized_factor)
+            
+            # Check cashflow health metrics
+            cashflow_health = data.get('cashflow_health', {})
+            if cashflow_health:
+                has_runway_months = 'runway_months' in cashflow_health
+                has_daily_burn_rate = 'daily_burn_rate' in cashflow_health
+                
+                self.log_test("Cashflow health has runway months", has_runway_months)
+                self.log_test("Cashflow health has daily burn rate", has_daily_burn_rate)
+            
+            print(f"   📊 Gross Margin: {profitability.get('gross_margin_pct', 0):.2f}%")
+            print(f"   📊 Net Margin: {profitability.get('net_margin_pct', 0):.2f}%")
+            print(f"   📊 Current Ratio: {liquidity.get('current_ratio', 0):.2f}")
+            print(f"   📊 ROE: {returns.get('roe_pct', 0):.2f}%")
+        else:
+            self.log_test("Financial Ratios report endpoint", False,
+                         f"Status: {response.status_code if response else 'No response'}")
+
+    def test_revenue_trend_report(self):
+        """Test GET /api/reports/revenue-trend (T2.1-Plus)"""
+        print("\n🔍 Testing Revenue Trend...")
+        
+        params = {
+            'period_start': '2026-01-01',
+            'period_end': '2026-04-19',
+            'granularity': 'day'
+        }
+        
+        response = self.api_request('GET', '/api/reports/revenue-trend', self.superadmin_token, params=params)
+        if response and response.status_code == 200:
+            data = response.json()
+            
+            # Check granularity
+            self.log_test("Revenue Trend has correct granularity", data.get('granularity') == 'day')
+            
+            # Check data array
+            trend_data = data.get('data', [])
+            has_data = len(trend_data) > 0
+            self.log_test("Revenue Trend has data array", has_data, f"Found {len(trend_data)} data points")
+            
+            # Check data structure
+            if trend_data:
+                first_point = trend_data[0]
+                has_date = 'date' in first_point
+                has_revenue = 'revenue' in first_point
+                has_cogs = 'cogs' in first_point
+                has_expense = 'expense' in first_point
+                has_net_profit = 'net_profit' in first_point
+                
+                self.log_test("Revenue Trend data has date", has_date)
+                self.log_test("Revenue Trend data has revenue", has_revenue)
+                self.log_test("Revenue Trend data has COGS", has_cogs)
+                self.log_test("Revenue Trend data has expense", has_expense)
+                self.log_test("Revenue Trend data has net profit", has_net_profit)
+            
+            # Test different granularities
+            for granularity in ['week', 'month']:
+                params['granularity'] = granularity
+                response = self.api_request('GET', '/api/reports/revenue-trend', self.superadmin_token, params=params)
+                if response and response.status_code == 200:
+                    gran_data = response.json()
+                    self.log_test(f"Revenue Trend {granularity} granularity works", 
+                                gran_data.get('granularity') == granularity)
+                else:
+                    self.log_test(f"Revenue Trend {granularity} granularity", False,
+                                f"Status: {response.status_code if response else 'No response'}")
+            
+            print(f"   📊 Data Points: {len(trend_data)}")
+            if trend_data:
+                total_revenue = sum(point.get('revenue', 0) for point in trend_data)
+                print(f"   📊 Total Revenue (period): Rp {total_revenue:,.0f}")
+        else:
+            self.log_test("Revenue Trend report endpoint", False,
+                         f"Status: {response.status_code if response else 'No response'}")
+
     def test_outlet_scoping(self):
         """Test outlet manager access scoping"""
         print("\n🔍 Testing Outlet Scoping...")
@@ -486,6 +690,9 @@ class JournalReportingTester:
         self.test_balance_sheet_report()
         self.test_trial_balance_report()
         self.test_general_ledger_report()
+        self.test_equity_changes_report()  # T2.1-Plus
+        self.test_financial_ratios_report()  # T2.1-Plus
+        self.test_revenue_trend_report()  # T2.1-Plus
         self.test_consistency_checks()
         self.test_outlet_scoping()
         
