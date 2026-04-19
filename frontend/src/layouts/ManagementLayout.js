@@ -32,6 +32,7 @@ const navItems = [
   { to: '/management/approvals', label: 'Approvals', icon: CheckSquare, section: 'Operations' },
   { to: '/management/approval-rules', label: 'Approval Rules', icon: Shield, section: 'Operations' },
   { to: '/management/admin', label: 'Admin', icon: Settings, section: 'Admin' },
+  { to: '/management/printer', label: 'Printer & Drawer', icon: Settings, section: 'Admin' },
   { to: '/management/audit', label: 'Audit Trail', icon: ClipboardList, section: 'Admin' },
 ];
 

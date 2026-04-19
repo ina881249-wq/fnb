@@ -14,6 +14,7 @@ import FinancePage from './pages/management/FinancePage';
 import InventoryPage from './pages/management/InventoryPage';
 import ReportsPage from './pages/management/ReportsPage';
 import AdminPage from './pages/management/AdminPage';
+import PrinterSettingsPage from './pages/management/PrinterSettingsPage';
 import ApprovalsPage from './pages/management/ApprovalsPage';
 import AuditTrailPage from './pages/management/AuditTrailPage';
 import COAPage from './pages/management/COAPage';
@@ -115,6 +116,7 @@ function AppRoutes() {
         <Route path="drilldown" element={<DrilldownPage />} />
         <Route path="alerts" element={<AlertsPage />} />
         <Route path="admin" element={<AdminPage />} />
+        <Route path="printer" element={<PrinterSettingsPage />} />
         <Route path="approvals" element={<ApprovalsPage />} />
         <Route path="approval-rules" element={<ApprovalRulesPage />} />
         <Route path="audit" element={<AuditTrailPage />} />

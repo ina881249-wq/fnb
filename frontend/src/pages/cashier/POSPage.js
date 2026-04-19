@@ -13,12 +13,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
 import { toast } from 'sonner';
-import { Plus, Minus, Trash2, ShoppingCart, Search, CreditCard, X, Wallet, Delete } from 'lucide-react';
+import { Plus, Minus, Trash2, ShoppingCart, Search, CreditCard, X, Wallet, Delete, Printer } from 'lucide-react';
+import escpos from '../../services/escposPrinter';
 
 const fmtIDR = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID');
 
 export default function POSPage() {
-  const { currentOutlet } = useAuth();
+  const { currentOutlet, outlets } = useAuth();
   const { lang } = useLang();
   const { currentShift } = useOutletContext() || {};
 
@@ -122,7 +123,30 @@ export default function POSPage() {
         amount_tendered: parseFloat(tendered || total),
       });
       toast.success(lang === 'id' ? `Order ${order.order_number} berhasil dibayar` : `Order ${order.order_number} paid`);
-      setReceiptOrder({ ...payRes.data.order, change: payRes.data.change });
+      const finalOrder = { ...payRes.data.order, change: payRes.data.change };
+      setReceiptOrder(finalOrder);
+
+      // Auto-print + open cash drawer if enabled
+      const autoPrint = localStorage.getItem('lp_auto_print_receipt') !== '0';
+      if (autoPrint) {
+        const outlet = outlets.find(o => o.id === currentOutlet);
+        try {
+          await escpos.smartPrint({
+            outlet,
+            order_number: finalOrder.order_number,
+            paid_at: finalOrder.paid_at,
+            order_type: finalOrder.order_type,
+            table_number: finalOrder.table_number,
+            customer_name: finalOrder.customer_name,
+            lines: finalOrder.lines,
+            total: finalOrder.total,
+            payment_method: finalOrder.payment_method,
+            amount_tendered: finalOrder.amount_tendered,
+            change: finalOrder.change_amount || finalOrder.change || 0,
+          });
+        } catch (e) { /* silent: screen receipt is still shown */ }
+      }
+
       clearCart();
       setCheckoutOpen(false);
     } catch (e) {
@@ -130,6 +154,27 @@ export default function POSPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const reprintReceipt = async () => {
+    if (!receiptOrder) return;
+    const outlet = outlets.find(o => o.id === currentOutlet);
+    try {
+      const mode = await escpos.smartPrint({
+        outlet,
+        order_number: receiptOrder.order_number,
+        paid_at: receiptOrder.paid_at,
+        order_type: receiptOrder.order_type,
+        table_number: receiptOrder.table_number,
+        customer_name: receiptOrder.customer_name,
+        lines: receiptOrder.lines,
+        total: receiptOrder.total,
+        payment_method: receiptOrder.payment_method,
+        amount_tendered: receiptOrder.amount_tendered,
+        change: receiptOrder.change_amount || receiptOrder.change || 0,
+      });
+      toast.success(mode === 'thermal' ? (lang === 'id' ? 'Cetak ulang ke printer thermal' : 'Reprinted to thermal') : (lang === 'id' ? 'Dialog print browser dibuka' : 'Browser print opened'));
+    } catch (e) { toast.error(e.message); }
   };
 
   if (!currentOutlet) {
@@ -447,8 +492,11 @@ export default function POSPage() {
               <div className="text-center text-xs text-[hsl(var(--muted-foreground))] pt-2">{lang === 'id' ? 'Terima kasih!' : 'Thank you!'}</div>
             </div>
           )}
-          <DialogFooter>
-            <Button className="w-full h-12" onClick={() => setReceiptOrder(null)} data-testid="pos-receipt-close">
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={reprintReceipt} className="h-12 gap-2" data-testid="pos-receipt-reprint">
+              <Printer className="w-4 h-4" /> {lang === 'id' ? 'Cetak Ulang' : 'Reprint'}
+            </Button>
+            <Button className="flex-1 h-12" onClick={() => setReceiptOrder(null)} data-testid="pos-receipt-close">
               {lang === 'id' ? 'Tutup' : 'Close'}
             </Button>
           </DialogFooter>

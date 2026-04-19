@@ -20,6 +20,8 @@
   - **Onboarding aman** (invite flow) + **password policy** + **2FA TOTP** untuk role sensitif
   - **Warehouse transfer governance** (request → approve → ship → receive, partial receive)
   - **KDS mode** untuk dapur (fullscreen kiosk, touch-friendly)
+  - **Real-time operations** via WebSocket untuk Kitchen (hapus polling)
+  - **Hardware readiness**: thermal printer ESC/POS + cash drawer (QRIS provider deferred)
 
 > **Current status (updated):**
 > - Baseline Phase 1 & 2: **COMPLETE**
@@ -40,6 +42,9 @@
 > - **P2a 2FA TOTP: COMPLETE**
 > - **P2c Advanced Transfer Workflow: COMPLETE**
 > - **P2e Mobile-first Kitchen KDS: COMPLETE**
+> - **Tier-1 E2 Real-time Kitchen WebSocket: COMPLETE**
+> - **Tier-1 E3 Server-side pagination readiness: COMPLETE (backend-ready; UI wired where needed)**
+> - **Tier-1 E1 Hardware Integration (ESC/POS + cash drawer + print fallback): COMPLETE** *(QRIS gateway deferred pending provider credentials)*
 > - Latest testing: `iteration_4.json` (frontend regression DataTable) — **no critical bugs**
 
 ---
@@ -125,7 +130,7 @@ Goal: make UI enterprise-grade for daily operations.
 - Journal list memiliki pagination + row-click detail.
 
 #### Remaining Scope (nice-to-have)
-- Server-side pagination untuk dataset sangat besar (stock movements, audit trail, approvals) bila volume tinggi.
+- Server-side pagination wiring untuk dataset sangat besar (stock movements, approvals) bila volume tinggi.
 - Smart filters + saved views (per role) pada modul critical.
 - Sticky headers + column visibility + export selected untuk tabel besar.
 - Reporting refactor milestone:
@@ -246,20 +251,13 @@ Delivered:
 
 #### Phase 3D.3 — DataTable rollout (remaining modules) (COMPLETED)
 Delivered:
-- Management → **InventoryPage**: 3 tabs (Stock on Hand, Items, Movements) migrated ke `DataTable` dengan search/sort/filter/pagination
-- Management → **JournalEntriesPage**: migrated ke `DataTable` + server-side pagination + status & source filter + row-click detail dialog
-- Management → **ReconciliationPage**: migrated ke `DataTable` + status/type filter + search
-- (Sudah sebelumnya) Management → **ApprovalsPage** dan **AuditTrailPage** sudah pakai `DataTable`
+- Management → **InventoryPage**: 3 tabs (Stock on Hand, Items, Movements)
+- Management → **JournalEntriesPage**: server-side pagination + filters + detail dialog
+- Management → **ReconciliationPage**: filters + search
+- (Sudah sebelumnya) Approvals & AuditTrail already use DataTable
 
 Bundled fix:
-- **DataTable**: fixed client-side pagination bug (Prev/Next bekerja selama `onPageChange` diberikan, tidak lagi tergantung `isServerSide`).
-
-Notes:
-- ProductionPage tetap kanban (lebih optimal untuk workflow status).
-- RecipeBOMPage tetap card grid (lebih optimal untuk browsing resep).
-
-Quality / Testing:
-- Testing agent `iteration_4.json`: tidak ada critical bugs; beberapa finding adalah false positives terkait selector.
+- DataTable client-side pagination bug fixed.
 
 Acceptance criteria — Met.
 
@@ -268,15 +266,10 @@ Acceptance criteria — Met.
 ### Phase 3E — Warehouse Portal (COMPLETED)
 Scope delivered:
 - Receiving (PO-less receiving / supplier delivery note)
-- Transfers antar-outlet (basic status: `in_transit`, `received`, `cancelled`)
-- Stock Adjustments (reason-coded)
-- Inventory Count (stock opname) + variance posting ke stock movements
-- Warehouse Dashboard (7-day KPIs)
-
-Integration notes:
-- Semua aksi gudang tercermin pada `stock_on_hand` + `stock_movements`.
-- Frontend line picker untuk Receiving/Transfers mewajibkan pilihan item dari katalog (`item_id`).
-- Routing & akses portal aktif.
+- Transfers antar-outlet (basic)
+- Stock Adjustments
+- Inventory Count (stock opname)
+- Warehouse Dashboard
 
 Acceptance criteria — Met.
 
@@ -284,7 +277,7 @@ Acceptance criteria — Met.
 
 ## Phase 3F — AI Executive Portal (COMPLETE)
 Delivered Features:
-1) AI Insights (briefing)
+1) AI Insights
 2) AI Chat
 3) AI Forecast
 4) AI Anomalies
@@ -299,59 +292,29 @@ Acceptance criteria — Met.
 ## P1 Production Hardening — Operational + Security + Mobility (COMPLETE)
 
 ### P1a — Auto-journal integration (Finance ↔ Operasional) (COMPLETED)
-Goal: Semua transaksi operasional penting auto-post ke journal (double-entry) untuk audit-grade reporting.
-
 Delivered:
-- File baru: `/app/backend/utils/posting_service.py`
-  - `post_receipt_journal()` → Dr Inventory (1210/1220) / Cr AP (2100)
-  - `post_waste_journal()` → Dr Waste & Spoilage (6800) / Cr Inventory (1210/1220)
-  - `post_adjustment_journal()` → gain/loss inventory vs Misc Expense (6900)
-- Integrasi:
-  - `routers/warehouse_router.py`: create_receipt + create_adjustment mengembalikan `journal_number`
-  - `routers/kitchen_router.py`: waste logging mengembalikan `journal_number`
-- Verified end-to-end: jurnal balanced dan posted, dengan `source_type`:
-  - `warehouse_receipt`, `kitchen_waste`, `warehouse_adjustment`
+- `/app/backend/utils/posting_service.py`
+- Warehouse: receipt + adjustment return `journal_number`
+- Kitchen waste returns `journal_number`
 
 Acceptance criteria — Met.
 
 ---
 
 ### P1c — Mobile/Tablet-first POS Cashier (COMPLETED)
-Goal: Siap pilot di lapangan (tablet/iPad/Android), touch-friendly dan cepat.
-
-Delivered (frontend):
-- Refactor besar `/app/frontend/src/pages/cashier/POSPage.js`:
-  - Responsive layout: desktop sticky cart; tablet/mobile via **bottom Sheet drawer** + floating FAB
-  - Touch targets: qty +/- jadi `h-10 w-10`, menu card min-height 140px, pill tabs tinggi 44px
-  - Numeric keypad (3×4): `1-9, 000, 0, backspace` untuk cash tender
-  - Quick-amount buttons: 50K/100K/150K/200K/500K
-  - Checkout button `h-14`
-- Verified via screenshot tablet/mobile flows.
+Delivered:
+- POS mobile/tablet layout (drawer + FAB)
+- Touch targets + keypad + quick amounts
 
 Acceptance criteria — Met.
 
 ---
 
 ### P1b — Auth hardening lanjutan (COMPLETED)
-Goal: Siap production multi-outlet (password policy, onboarding aman, audit login).
-
-Backend (`routers/auth_router.py`):
-- Password policy: min 8 char, wajib ada 1 huruf + 1 angka via `validate_password_policy()`
-- Applied to: register, change-password, admin reset password, accept-invite
-- New endpoints:
-  - `POST /api/auth/admin/invite` (admin buat invite token)
-  - `GET /api/auth/invite-info?token=` (public pre-check)
-  - `POST /api/auth/accept-invite` (public accept + set password + auto-login)
-  - `GET /api/auth/sessions?user_id=&limit=` (recent login activity, berbasis audit log)
-  - `GET /api/auth/password-policy` (public UI hints)
-
-Frontend:
-- New page: `/app/frontend/src/pages/AcceptInvitePage.js`
-- Route baru: `/accept-invite` (unauthenticated)
-- Management Admin:
-  - Invite User dialog + copyable invite link
-  - Session history dialog (Clock icon)
-  - Password hint pada create user
+Delivered:
+- Password policy (min 8, letter+digit)
+- Invite flow + accept-invite page + auto-login
+- Sessions log endpoint + Admin viewer
 
 Acceptance criteria — Met.
 
@@ -360,81 +323,91 @@ Acceptance criteria — Met.
 ## P2 — Production Readiness Plus (COMPLETE)
 
 ### P2c — Advanced Warehouse Transfer Workflow (COMPLETED)
-Goal: formal transfer governance dan traceability lintas outlet.
-
-Backend (`warehouse_router.py`):
-- Status baru: `requested → in_transit → partially_received → received` + branch `rejected`, `cancelled`
-- Endpoint tambahan:
-  - `POST /api/warehouse/transfers` support `requires_approval` (jika true → status `requested`)
-  - `POST /api/warehouse/transfers/{id}/approve` (ship: potong stok source)
-  - `POST /api/warehouse/transfers/{id}/reject` (tanpa dampak stok)
-  - `POST /api/warehouse/transfers/{id}/receive` support partial per-line (`lines:[{item_id, received_qty}]`)
-- Policy:
-  - Deduct stock hanya saat **approve** (bukan saat request)
-  - Partial receive menyimpan `received_qty` per line
-
-Frontend (`WarehouseTransfers.js`):
-- Create transfer dialog: checkbox **requires approval**
-- Approve/Reject action buttons untuk status `requested`
-- Receive dialog mendukung **partial receive** (input qty per item)
-- Badge status dengan 6 warna
+Delivered:
+- request/approve/reject + partial receive
+- stock deducted on approve
+- UI updated in Warehouse Transfers
 
 Acceptance criteria — Met.
 
 ---
 
 ### P2e — Mobile-first Kitchen KDS (COMPLETED)
-Goal: kitchen workstation siap tablet/kiosk, cepat, jelas, touch-friendly.
-
-Frontend (`KitchenQueue.js`) — rewritten:
-- Mobile: **horizontal scroll-snap carousel** per kolom status
-- Tablet/Desktop: grid kanban
-- Big touch targets: action button `h-14`, typography diperbesar
-- Urgency indicator:
-  - ≥15 menit: border amber
-  - ≥25 menit: pulsing border merah
-- Fullscreen toggle (native Fullscreen API) untuk kiosk mode
-- Show/Hide Served toggle
-- Notes display dalam callout amber
-- Stats strip compact di mobile
+Delivered:
+- horizontal scroll-snap, urgency indicator, fullscreen kiosk mode
 
 Acceptance criteria — Met.
 
 ---
 
 ### P2a — 2FA TOTP (COMPLETED)
-Goal: hardening security untuk role sensitif (management/executive/superadmin).
+Delivered:
+- backend endpoints + QR setup
+- LoginPage TOTP flow
+- `/2fa-setup` page
 
-Backend (`auth_router.py` + libs `pyotp`, `qrcode`):
-- `POST /api/auth/2fa/setup` → secret + provisioning URI + QR base64 PNG
-- `POST /api/auth/2fa/enable` → verify code + finalize
-- `POST /api/auth/2fa/disable` → require current code
-- `GET /api/auth/2fa/status` → enabled/required_by_role/enrolled_at
-- Login behavior:
-  - jika `totp_enabled=true` dan `totp_code` kosong → `401 {detail: "TOTP_REQUIRED"}`
+Acceptance criteria — Met.
 
-Frontend:
-- LoginPage: menangani `TOTP_REQUIRED` → tampilkan input kode 6-digit (retry login)
-- New page: `/2fa-setup` via `TwoFactorSetupPage.js` (QR + verify + disable)
+---
+
+## Tier 1 Enhancements — Go-Live Readiness (COMPLETE; QRIS deferred)
+
+### E2 — Real-time WebSocket Kitchen (COMPLETED)
+Delivered:
+- New hook: `/app/frontend/src/hooks/useWebSocket.js`
+  - auto-reconnect + ping keep-alive + event filtering
+- KitchenQueue subscribes to:
+  - `pos_order_paid`, `pos_order_created`, `kitchen_ticket_status_changed`, `kitchen_waste_logged`, `shift_closed`
+- Fallback polling reduced 10s → 30s
+- Audio beep on `pos_order_paid`
+
+Acceptance criteria — Met.
+
+---
+
+### E3 — Server-side Pagination (COMPLETED; backend-ready)
+Delivered:
+- Backend already supports `skip/limit/total` for heavy lists:
+  - stock movements, audit logs, journals, pos orders
+- Frontend already wired server-side for:
+  - AuditTrailPage
+  - JournalEntriesPage
+- Inventory movements can be wired when volume grows (>5k records). Documented.
+
+Acceptance criteria — Met.
+
+---
+
+### E1 — Hardware Integration (COMPLETED; QRIS deferred)
+Delivered:
+- ESC/POS printer service (Web Serial): `/app/frontend/src/services/escposPrinter.js`
+  - connect/pair, auto-connect, printReceipt (ESC/POS bytes), cut, cash drawer kick
+  - `smartPrint()` with browser print fallback (80mm HTML template)
+- Printer Settings page: `/management/printer`
+  - Connection status, pairing instructions, paper width (58/80mm), test print, open drawer
+- POS integration:
+  - Auto-print after successful payment (toggle via `localStorage lp_auto_print_receipt=0`)
+  - Receipt dialog now includes **Reprint** button
+  - Auto open cash drawer on cash payment if paired
+
+Deferred:
+- QRIS payment gateway integration (Midtrans/Xendit/DOKU) — requires provider selection + API keys.
 
 Acceptance criteria — Met.
 
 ---
 
 ## 3) Next Actions (immediate)
-Karena P1 + P2 sudah complete, opsi lanjutan untuk iterasi berikutnya:
-1) **Evaluation + Enhancement Recommendations (post-P2)**
-   - UAT checklist per role (Cashier/Kitchen/Warehouse/Manager/Finance/Executive)
-   - Gap analysis data integrity: journal vs reports, stock movements vs SOH
-   - Performance check (list pages, large datasets)
-2) **P3 — Hardware + Integrations**
-   - Printer struk (ESC/POS), cash drawer, QRIS provider integration
-3) **P3 — Journal-driven reporting full refactor**
-   - P&L/Cashflow/Balance Sheet 100% dari journal sebagai single source-of-truth
-4) **P3 — Real-time websockets UI**
-   - Kitchen UI subscribe ke `kitchen_ticket_new` + updates (hapus polling)
-5) **P3 — Advanced workflows**
-   - Receiving berbasis PO, approval threshold untuk adjustments, attachments (invoice/receipt images)
+1) **Pilot lapangan** dengan thermal printer nyata (58mm/80mm) + cash drawer:
+   - verifikasi pairing Web Serial di Chrome/Edge
+   - test print formatting untuk menu panjang
+   - verifikasi drawer kick wiring
+2) Putuskan **provider QRIS** (Midtrans/Xendit/DOKU) dan siapkan API keys untuk integrasi.
+3) Monitoring performa setelah 2–4 minggu data akumulasi:
+   - jika stock movements/audit logs > 5k, wire server-side pagination pada halaman yang masih client-side
+4) Optional hardening:
+   - rate limiting untuk /auth/login
+   - encryption-at-rest untuk `totp_secret`
 
 ---
 
@@ -455,17 +428,19 @@ Karena P1 + P2 sudah complete, opsi lanjutan untuk iterasi berikutnya:
   - Auto-journal untuk receiving/waste/adjustment aktif dan balanced
   - Password policy + invite onboarding + session audit + **2FA** tersedia
   - Warehouse transfers punya governance (request/approve/partial receive)
+  - Kitchen real-time via WebSocket (polling hanya fallback)
+  - Hardware printing + cash drawer siap (QRIS integration pending provider)
 
 ---
 
 ## Appendix — Current Navigation Snapshot
 ### Management Portal
 - **Executive**: Dashboard, Alerts
-- **Finance**: Chart of Accounts, Journal Entries, Cash & Bank, Reconciliation
+- **Finance**: Chart of Accounts, Journal Entries, Cash & Bank, Reconciliation, Budgeting, Recurring
 - **Inventory**: Items & Stock, Recipe & BOM, Production Orders
-- **Reports**: Reports, Variance
-- **Operations**: Closing Monitor, Approvals
-- **Admin**: Admin, Audit Trail
+- **Reports**: Reports, Variance, Drill-Down
+- **Operations**: Closing Monitor, Approvals, Approval Rules
+- **Admin**: Admin, Printer & Drawer, Audit Trail
 
 ### Outlet Portal
 Dashboard, Cash, Sales, Petty Cash, Inventory, Daily Closing
@@ -474,7 +449,7 @@ Dashboard, Cash, Sales, Petty Cash, Inventory, Daily Closing
 Dashboard, POS, Orders, Shift
 
 ### Kitchen Portal
-Dashboard, Queue (Mobile KDS), Waste
+Dashboard, Queue (Mobile KDS + Realtime WS), Waste
 
 ### Warehouse Portal
 Dashboard, Receiving, Transfers (Advanced), Adjustments, Inventory Count

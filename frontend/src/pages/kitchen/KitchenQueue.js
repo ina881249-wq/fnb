@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useLang } from '../../context/LangContext';
+import useWebSocket from '../../hooks/useWebSocket';
 import api from '../../api/client';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -49,9 +50,36 @@ export default function KitchenQueue() {
   }, [currentOutlet, includeServed, lang]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Real-time: refresh on kitchen/POS events. Fallback: polling every 30s (vs 10s before).
+  const handleWsEvent = useCallback((msg) => {
+    if (!msg || !msg.type) return;
+    const relevant = ['pos_order_paid', 'pos_order_created', 'kitchen_ticket_status_changed', 'kitchen_waste_logged', 'shift_closed'];
+    if (relevant.includes(msg.type)) {
+      // Only reload if event affects our outlet (if outlet_id present)
+      if (!msg.outlet_id || msg.outlet_id === currentOutlet) {
+        load();
+        if (msg.type === 'pos_order_paid') {
+          try {
+            // Subtle audio notification (synthesized beep)
+            const audio = new window.AudioContext();
+            const osc = audio.createOscillator();
+            osc.frequency.value = 880;
+            osc.connect(audio.destination);
+            osc.start();
+            setTimeout(() => { osc.stop(); audio.close(); }, 150);
+          } catch (e) { /* audio blocked */ }
+        }
+      }
+    }
+  }, [currentOutlet, load]);
+
+  useWebSocket(handleWsEvent, ['pos_order_paid', 'pos_order_created', 'kitchen_ticket_status_changed', 'kitchen_waste_logged', 'shift_closed']);
+
+  // Fallback polling — 30s (was 10s)
   useEffect(() => {
     if (!currentOutlet) return;
-    const h = setInterval(load, 10000);
+    const h = setInterval(load, 30000);
     return () => clearInterval(h);
   }, [currentOutlet, load]);
 
