@@ -218,6 +218,22 @@ async def submit_closing(outlet_id: str, date: str, req: ClosingSubmitRequest, c
     
     await log_audit(current_user["id"], "submit", "operations", "daily_closing", str(closing["_id"]), details=f"Submitted closing for {date}")
     await ws_manager.broadcast_all({"type": "closing_submitted", "outlet_id": outlet_id, "date": date})
+    # Notification — alert management portal
+    try:
+        from utils.notification_service import create_notification
+        await create_notification(
+            type="closing",
+            title=f"Closing menunggu approval — {date}",
+            body=f"Outlet telah submit closing untuk {date}. Silakan review.",
+            severity="warning",
+            outlet_id=outlet_id,
+            portal_scope=["management"],
+            ref_type="daily_closing",
+            ref_id=str(closing["_id"]),
+            link=f"/management/closing/{outlet_id}/{date}",
+        )
+    except Exception as e:
+        print(f"[notif] closing submit notify failed: {e}")
     return {"message": "Closing submitted for approval"}
 
 @router.post("/approve")
@@ -238,6 +254,22 @@ async def approve_closing(outlet_id: str, date: str, req: ClosingActionRequest, 
     
     await log_audit(current_user["id"], "approve", "operations", "daily_closing", str(closing["_id"]), details=f"Approved & locked closing for {date}")
     await ws_manager.broadcast_to_outlet(outlet_id, {"type": "closing_locked", "date": date})
+    # Notification — inform outlet staff
+    try:
+        from utils.notification_service import create_notification
+        await create_notification(
+            type="closing",
+            title=f"Closing disetujui & dikunci — {date}",
+            body=f"Closing outlet untuk {date} telah di-lock oleh {current_user.get('name')}.",
+            severity="success",
+            outlet_id=outlet_id,
+            portal_scope=["outlet", "management"],
+            ref_type="daily_closing",
+            ref_id=str(closing["_id"]),
+            link=f"/outlet/closing",
+        )
+    except Exception as e:
+        print(f"[notif] closing approve notify failed: {e}")
     return {"message": "Closing approved and day locked"}
 
 @router.post("/override")

@@ -5,6 +5,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useLang } from '../context/LangContext';
 import api from '../api/client';
 import { Button } from '../components/ui/button';
+import NotificationBell from '../components/common/NotificationBell';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
 import {
@@ -92,6 +93,7 @@ export default function KitchenLayout() {
           <Button variant="ghost" size="sm" onClick={toggleTheme} className="h-8 w-8 p-0" data-testid="kitchen-theme-toggle">
             {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </Button>
+          <NotificationBell />
           <div className="hidden sm:flex items-center gap-2">
             <div className="w-7 h-7 rounded-full bg-[hsl(var(--primary))]/20 border border-[hsl(var(--primary))]/30 flex items-center justify-center">
               <span className="text-[10px] font-semibold text-[hsl(var(--primary))]">{user?.name?.charAt(0)}</span>

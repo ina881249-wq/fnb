@@ -4,15 +4,18 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLang } from '../context/LangContext';
 import { Button } from '../components/ui/button';
+import NotificationBell from '../components/common/NotificationBell';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { LayoutDashboard, Package, ArrowLeftRight, Settings, ClipboardCheck, Warehouse, LogOut, ArrowLeft, Sun, Moon, Languages, Store } from 'lucide-react';
+import { LayoutDashboard, Package, ArrowLeftRight, Settings, ClipboardCheck, Warehouse, LogOut, ArrowLeft, Sun, Moon, Languages, Store, FileText, SlidersHorizontal } from 'lucide-react';
 
 const navItems = [
   { to: '/warehouse/dashboard', label: 'Dashboard', labelId: 'Dasbor', icon: LayoutDashboard },
+  { to: '/warehouse/purchase-orders', label: 'Purchase Orders', labelId: 'Purchase Orders', icon: FileText },
   { to: '/warehouse/receiving', label: 'Receiving', labelId: 'Penerimaan', icon: Package },
   { to: '/warehouse/transfers', label: 'Transfers', labelId: 'Transfer', icon: ArrowLeftRight },
   { to: '/warehouse/adjustments', label: 'Adjustments', labelId: 'Penyesuaian', icon: Settings },
   { to: '/warehouse/counts', label: 'Inventory Count', labelId: 'Stok Opname', icon: ClipboardCheck },
+  { to: '/warehouse/settings', label: 'Settings', labelId: 'Pengaturan', icon: SlidersHorizontal },
 ];
 
 export default function WarehouseLayout() {
@@ -62,6 +65,7 @@ export default function WarehouseLayout() {
           <Button variant="ghost" size="sm" onClick={toggleTheme} className="h-8 w-8 p-0" data-testid="wh-theme-toggle">
             {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </Button>
+          <NotificationBell />
           <div className="hidden sm:flex items-center gap-2">
             <div className="w-7 h-7 rounded-full bg-[hsl(var(--primary))]/20 border border-[hsl(var(--primary))]/30 flex items-center justify-center">
               <span className="text-[10px] font-semibold text-[hsl(var(--primary))]">{user?.name?.charAt(0)}</span>

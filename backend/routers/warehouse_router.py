@@ -13,6 +13,7 @@ from bson import ObjectId
 from database import (
     warehouse_receipts_col, warehouse_transfers_col,
     warehouse_adjustments_col, warehouse_counts_col, suppliers_col,
+    warehouse_settings_col, purchase_orders_col, po_lines_col, gridfs_bucket,
     items_col, stock_on_hand_col, stock_movements_col, outlets_col,
 )
 from auth import get_current_user, check_outlet_access
@@ -517,9 +518,23 @@ async def create_adjustment(req: AdjustmentCreate, current_user: dict = Depends(
     adj_date = req.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     lines_out = []
+    total_value_abs = 0.0
     for ln in req.lines:
         delta = float(ln.new_qty) - float(ln.current_qty)
-        lines_out.append({**ln.dict(), "delta": delta})
+        # Estimate value impact using item's cost_per_unit
+        try:
+            item = await items_col.find_one({"_id": ObjectId(ln.item_id)})
+            cost_per_unit = (item or {}).get("cost_per_unit", 0) or 0
+        except Exception:
+            cost_per_unit = 0
+        value_impact = delta * cost_per_unit
+        total_value_abs += abs(value_impact)
+        lines_out.append({**ln.dict(), "delta": delta, "value_impact": round(value_impact, 2)})
+
+    # Get outlet-specific adjustment approval threshold
+    settings = await warehouse_settings_col.find_one({"outlet_id": req.outlet_id}) or {}
+    threshold = float(settings.get("adjustment_approval_threshold", 1_000_000))  # default 1jt
+    requires_approval = total_value_abs > threshold and not current_user.get("is_superadmin")
 
     doc = {
         "adjustment_number": adj_number,
@@ -529,33 +544,165 @@ async def create_adjustment(req: AdjustmentCreate, current_user: dict = Depends(
         "reason": req.reason,
         "lines": lines_out,
         "total_items": len(req.lines),
+        "total_value_abs": round(total_value_abs, 2),
+        "threshold_applied": threshold,
         "notes": req.notes,
-        "status": "posted",
+        "status": "pending_approval" if requires_approval else "posted",
+        "attachments": [],
         "created_by": current_user["id"],
         "created_by_name": current_user.get("name", ""),
         "created_at": now_utc(),
     }
     result = await warehouse_adjustments_col.insert_one(doc)
+    adj_id = str(result.inserted_id)
 
-    # Apply
-    for ln in lines_out:
-        if ln["delta"] != 0:
+    journal_number = None
+    if not requires_approval:
+        # Apply stock + post journal directly
+        for ln in lines_out:
+            if ln["delta"] != 0:
+                await _apply_stock_delta(
+                    ln["item_id"], req.outlet_id, float(ln["delta"]),
+                    "adjustment", adj_number,
+                    f"Adjustment {adj_number}: {req.reason}",
+                    current_user["id"],
+                )
+        doc_for_post = {**doc, "_id": result.inserted_id}
+        journal_result = await post_adjustment_journal(doc_for_post, current_user["id"])
+        journal_number = journal_result["journal_number"] if journal_result else None
+    else:
+        # Notify management for approval
+        try:
+            from utils.notification_service import create_notification
+            await create_notification(
+                type="warehouse",
+                title=f"Adjustment menunggu approval: {adj_number}",
+                body=f"Nilai adjustment Rp {total_value_abs:,.0f} melebihi threshold Rp {threshold:,.0f}. Reason: {req.reason}",
+                severity="warning",
+                outlet_id=req.outlet_id,
+                portal_scope=["management", "warehouse"],
+                ref_type="warehouse_adjustment",
+                ref_id=adj_id,
+                link="/warehouse/adjustments",
+            )
+        except Exception as e:
+            print(f"[notif] adjustment notify failed: {e}")
+
+    await log_audit(current_user["id"], "create", "warehouse", "adjustment", adj_id,
+                    details=f"{adj_number}: {len(req.lines)} items, Rp {total_value_abs:,.0f}, status: {doc['status']}")
+
+    return {
+        "id": adj_id,
+        "adjustment_number": adj_number,
+        "journal_number": journal_number,
+        "status": doc["status"],
+        "requires_approval": requires_approval,
+        "total_value_abs": round(total_value_abs, 2),
+        "threshold": threshold,
+    }
+
+
+@router.post("/adjustments/{adjustment_id}/approve")
+async def approve_adjustment(adjustment_id: str, current_user: dict = Depends(get_current_user)):
+    """Approve a pending adjustment: apply stock movements + auto-post journal."""
+    try:
+        adj = await warehouse_adjustments_col.find_one({"_id": ObjectId(adjustment_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid adjustment id")
+    if not adj:
+        raise HTTPException(status_code=404, detail="Adjustment not found")
+    if adj.get("status") != "pending_approval":
+        raise HTTPException(status_code=400, detail=f"Cannot approve: status is {adj.get('status')}")
+    # permission — superadmin OR finance approver
+    if not current_user.get("is_superadmin"):
+        from auth import check_permission
+        await check_permission(current_user, "approvals.approve")
+
+    # Apply stock deltas now
+    for ln in adj.get("lines", []):
+        if ln.get("delta") and float(ln["delta"]) != 0:
             await _apply_stock_delta(
-                ln["item_id"], req.outlet_id, float(ln["delta"]),
-                "adjustment", adj_number,
-                f"Adjustment {adj_number}: {req.reason}",
+                ln["item_id"], adj["outlet_id"], float(ln["delta"]),
+                "adjustment", adj["adjustment_number"],
+                f"Adjustment {adj['adjustment_number']} (approved): {adj.get('reason', '')}",
                 current_user["id"],
             )
 
-    await log_audit(current_user["id"], "create", "warehouse", "adjustment", str(result.inserted_id),
-                    details=f"{adj_number}: {len(req.lines)} items, reason: {req.reason}")
-
-    # Auto-post journal (gain/loss vs Misc Expense)
-    doc_for_post = {**doc, "_id": result.inserted_id}
-    journal_result = await post_adjustment_journal(doc_for_post, current_user["id"])
+    journal_result = await post_adjustment_journal(adj, current_user["id"])
     journal_number = journal_result["journal_number"] if journal_result else None
 
-    return {"id": str(result.inserted_id), "adjustment_number": adj_number, "journal_number": journal_number}
+    await warehouse_adjustments_col.update_one(
+        {"_id": adj["_id"]},
+        {"$set": {
+            "status": "posted",
+            "approved_by": current_user["id"],
+            "approved_by_name": current_user.get("name", ""),
+            "approved_at": now_utc(),
+            "journal_number": journal_number,
+        }}
+    )
+
+    await log_audit(current_user["id"], "approve", "warehouse", "adjustment", adjustment_id,
+                    details=f"Approved {adj['adjustment_number']} (Rp {adj.get('total_value_abs', 0):,.0f})")
+
+    try:
+        from utils.notification_service import create_notification
+        await create_notification(
+            type="warehouse",
+            title=f"Adjustment disetujui: {adj['adjustment_number']}",
+            body=f"Disetujui oleh {current_user.get('name')}. Stock & jurnal telah diposting.",
+            severity="success",
+            user_id=adj.get("created_by"),
+            ref_type="warehouse_adjustment",
+            ref_id=adjustment_id,
+            link="/warehouse/adjustments",
+        )
+    except Exception as e:
+        print(f"[notif] adjustment approve notify failed: {e}")
+
+    return {"ok": True, "status": "posted", "journal_number": journal_number}
+
+
+@router.post("/adjustments/{adjustment_id}/reject")
+async def reject_adjustment(adjustment_id: str, current_user: dict = Depends(get_current_user)):
+    try:
+        adj = await warehouse_adjustments_col.find_one({"_id": ObjectId(adjustment_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid adjustment id")
+    if not adj:
+        raise HTTPException(status_code=404, detail="Adjustment not found")
+    if adj.get("status") != "pending_approval":
+        raise HTTPException(status_code=400, detail=f"Cannot reject: status is {adj.get('status')}")
+    if not current_user.get("is_superadmin"):
+        from auth import check_permission
+        await check_permission(current_user, "approvals.reject")
+
+    await warehouse_adjustments_col.update_one(
+        {"_id": adj["_id"]},
+        {"$set": {
+            "status": "rejected",
+            "rejected_by": current_user["id"],
+            "rejected_by_name": current_user.get("name", ""),
+            "rejected_at": now_utc(),
+        }}
+    )
+    await log_audit(current_user["id"], "reject", "warehouse", "adjustment", adjustment_id,
+                    details=f"Rejected {adj['adjustment_number']}")
+    try:
+        from utils.notification_service import create_notification
+        await create_notification(
+            type="warehouse",
+            title=f"Adjustment ditolak: {adj['adjustment_number']}",
+            body=f"Ditolak oleh {current_user.get('name')}. Stock tidak berubah.",
+            severity="critical",
+            user_id=adj.get("created_by"),
+            ref_type="warehouse_adjustment",
+            ref_id=adjustment_id,
+            link="/warehouse/adjustments",
+        )
+    except Exception:
+        pass
+    return {"ok": True, "status": "rejected"}
 
 
 @router.get("/adjustments")
@@ -760,3 +907,468 @@ async def warehouse_dashboard(current_user: dict = Depends(get_current_user), ou
         "count_sessions_week": count_sessions,
         "count_variance_week": count_variance_week,
     }
+
+
+# ============================================================================
+# WAREHOUSE SETTINGS (per outlet)
+# ============================================================================
+
+class WarehouseSettingsUpdate(BaseModel):
+    adjustment_approval_threshold: Optional[float] = 1_000_000
+    require_receipt_attachment: Optional[bool] = False
+    auto_receive_po: Optional[bool] = False
+
+
+@router.get("/settings/{outlet_id}")
+async def get_warehouse_settings(outlet_id: str, current_user: dict = Depends(get_current_user)):
+    await check_outlet_access(current_user, outlet_id)
+    s = await warehouse_settings_col.find_one({"outlet_id": outlet_id})
+    if not s:
+        # Return default settings
+        return {
+            "outlet_id": outlet_id,
+            "adjustment_approval_threshold": 1_000_000,
+            "require_receipt_attachment": False,
+            "auto_receive_po": False,
+            "is_default": True,
+        }
+    return {**serialize_doc(s), "is_default": False}
+
+
+@router.put("/settings/{outlet_id}")
+async def update_warehouse_settings(outlet_id: str, req: WarehouseSettingsUpdate, current_user: dict = Depends(get_current_user)):
+    if not current_user.get("is_superadmin"):
+        from auth import check_permission
+        await check_permission(current_user, "settings.manage")
+    payload = {k: v for k, v in req.dict().items() if v is not None}
+    payload["outlet_id"] = outlet_id
+    payload["updated_by"] = current_user["id"]
+    payload["updated_at"] = now_utc()
+    await warehouse_settings_col.update_one(
+        {"outlet_id": outlet_id}, {"$set": payload}, upsert=True,
+    )
+    await log_audit(current_user["id"], "update", "warehouse", "settings", outlet_id,
+                    details=f"Threshold: {payload.get('adjustment_approval_threshold')}")
+    return {"ok": True, "settings": payload}
+
+
+@router.get("/settings")
+async def list_warehouse_settings(current_user: dict = Depends(get_current_user)):
+    """List all settings (for admin overview)."""
+    if not current_user.get("is_superadmin"):
+        from auth import check_permission
+        await check_permission(current_user, "settings.manage")
+    items = []
+    async for s in warehouse_settings_col.find({}):
+        items.append(serialize_doc(s))
+    return {"items": items}
+
+
+# ============================================================================
+# PURCHASE ORDERS
+# ============================================================================
+
+class POLine(BaseModel):
+    item_id: str
+    item_name: str
+    qty: float
+    unit_cost: float
+    uom: str = "pcs"
+    note: Optional[str] = ""
+
+
+class PurchaseOrderCreate(BaseModel):
+    outlet_id: str
+    supplier_id: str
+    supplier_name: str
+    expected_date: Optional[str] = ""
+    lines: List[POLine]
+    notes: Optional[str] = ""
+
+
+class POStatusUpdate(BaseModel):
+    status: str  # submitted | approved | cancelled | closed
+    comment: Optional[str] = ""
+
+
+@router.post("/purchase-orders")
+async def create_purchase_order(req: PurchaseOrderCreate, current_user: dict = Depends(get_current_user)):
+    await check_outlet_access(current_user, req.outlet_id)
+    today = datetime.now(timezone.utc).strftime("%Y%m%d")
+    count = await purchase_orders_col.count_documents({"po_number": {"$regex": f"^PO-{today}"}})
+    po_number = f"PO-{today}-{count + 1:04d}"
+
+    total = 0.0
+    lines_out = []
+    for ln in req.lines:
+        lt = float(ln.qty) * float(ln.unit_cost)
+        total += lt
+        lines_out.append({**ln.dict(), "line_total": round(lt, 2), "received_qty": 0})
+
+    doc = {
+        "po_number": po_number,
+        "outlet_id": req.outlet_id,
+        "supplier_id": req.supplier_id,
+        "supplier_name": req.supplier_name,
+        "expected_date": req.expected_date or "",
+        "lines": lines_out,
+        "total_amount": round(total, 2),
+        "notes": req.notes,
+        "status": "draft",
+        "attachments": [],
+        "created_by": current_user["id"],
+        "created_by_name": current_user.get("name", ""),
+        "created_at": now_utc(),
+    }
+    res = await purchase_orders_col.insert_one(doc)
+    await log_audit(current_user["id"], "create", "warehouse", "purchase_order", str(res.inserted_id),
+                    details=f"{po_number}: {len(req.lines)} items, Rp {total:,.0f}")
+    return {"id": str(res.inserted_id), "po_number": po_number, "total_amount": round(total, 2), "status": "draft"}
+
+
+@router.get("/purchase-orders")
+async def list_purchase_orders(
+    current_user: dict = Depends(get_current_user),
+    outlet_id: str = "",
+    status: str = "",
+    search: str = "",
+    skip: int = 0,
+    limit: int = 50,
+):
+    q = {}
+    if outlet_id:
+        q["outlet_id"] = outlet_id
+    elif not current_user.get("is_superadmin"):
+        q["outlet_id"] = {"$in": current_user.get("outlet_access", [])}
+    if status:
+        q["status"] = status
+    if search:
+        q["$or"] = [
+            {"po_number": {"$regex": search, "$options": "i"}},
+            {"supplier_name": {"$regex": search, "$options": "i"}},
+        ]
+    total = await purchase_orders_col.count_documents(q)
+    items = []
+    async for p in purchase_orders_col.find(q).sort("created_at", -1).skip(skip).limit(limit):
+        items.append(serialize_doc(p))
+    return {"items": items, "total": total}
+
+
+@router.get("/purchase-orders/{po_id}")
+async def get_purchase_order(po_id: str, current_user: dict = Depends(get_current_user)):
+    try:
+        p = await purchase_orders_col.find_one({"_id": ObjectId(po_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid id")
+    if not p:
+        raise HTTPException(status_code=404, detail="Purchase Order not found")
+    return serialize_doc(p)
+
+
+@router.post("/purchase-orders/{po_id}/status")
+async def update_po_status(po_id: str, req: POStatusUpdate, current_user: dict = Depends(get_current_user)):
+    valid = ["submitted", "approved", "cancelled", "closed"]
+    if req.status not in valid:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Valid: {valid}")
+    try:
+        p = await purchase_orders_col.find_one({"_id": ObjectId(po_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid id")
+    if not p:
+        raise HTTPException(status_code=404, detail="Purchase Order not found")
+    # Simple state machine
+    current = p.get("status", "draft")
+    allowed = {
+        "draft": ["submitted", "cancelled"],
+        "submitted": ["approved", "cancelled"],
+        "approved": ["closed", "cancelled"],
+        "partial_received": ["closed", "cancelled"],
+        "received": ["closed"],
+    }
+    if req.status not in allowed.get(current, []):
+        raise HTTPException(status_code=400, detail=f"Cannot move from '{current}' to '{req.status}'")
+
+    patch = {"status": req.status, "updated_at": now_utc()}
+    if req.status == "approved":
+        patch["approved_by"] = current_user["id"]
+        patch["approved_at"] = now_utc()
+    elif req.status == "cancelled":
+        patch["cancelled_by"] = current_user["id"]
+        patch["cancelled_at"] = now_utc()
+    elif req.status == "closed":
+        patch["closed_by"] = current_user["id"]
+        patch["closed_at"] = now_utc()
+    await purchase_orders_col.update_one({"_id": p["_id"]}, {"$set": patch})
+    await log_audit(current_user["id"], f"po_{req.status}", "warehouse", "purchase_order", po_id, details=req.comment or "")
+
+    # Notify outlet / management
+    try:
+        from utils.notification_service import create_notification
+        await create_notification(
+            type="warehouse",
+            title=f"PO {p['po_number']} → {req.status.upper()}",
+            body=req.comment or f"Status diperbarui oleh {current_user.get('name')}",
+            severity="info",
+            outlet_id=p.get("outlet_id"),
+            portal_scope=["warehouse", "management"],
+            ref_type="purchase_order",
+            ref_id=po_id,
+            link="/warehouse/purchase-orders",
+        )
+    except Exception:
+        pass
+    return {"ok": True, "status": req.status}
+
+
+class POReceiveLine(BaseModel):
+    item_id: str
+    qty_received: float
+    unit_cost: Optional[float] = None  # optional override
+
+
+class POReceiveRequest(BaseModel):
+    lines: List[POReceiveLine]
+    notes: Optional[str] = ""
+
+
+@router.post("/purchase-orders/{po_id}/receive")
+async def receive_po(po_id: str, req: POReceiveRequest, current_user: dict = Depends(get_current_user)):
+    """Receive a (partial or full) shipment against a Purchase Order.
+    Creates a warehouse receipt + applies stock + updates PO line received_qty."""
+    try:
+        p = await purchase_orders_col.find_one({"_id": ObjectId(po_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid id")
+    if not p:
+        raise HTTPException(status_code=404, detail="PO not found")
+    if p.get("status") not in ("approved", "partial_received"):
+        raise HTTPException(status_code=400, detail=f"Cannot receive: PO status is {p.get('status')}")
+    await check_outlet_access(current_user, p["outlet_id"])
+
+    # Build receipt doc + update PO line qty
+    lines_map = {ln["item_id"]: ln for ln in p.get("lines", [])}
+    receipt_lines = []
+    grand_total = 0.0
+    for rl in req.lines:
+        base_ln = lines_map.get(rl.item_id)
+        if not base_ln:
+            continue
+        qty = float(rl.qty_received or 0)
+        if qty <= 0:
+            continue
+        unit_cost = float(rl.unit_cost) if rl.unit_cost is not None else float(base_ln.get("unit_cost", 0))
+        subtotal = qty * unit_cost
+        grand_total += subtotal
+        receipt_lines.append({
+            "item_id": rl.item_id,
+            "item_name": base_ln.get("item_name", ""),
+            "qty": qty,
+            "uom": base_ln.get("uom", "pcs"),
+            "unit_cost": unit_cost,
+            "subtotal": round(subtotal, 2),
+        })
+
+    if not receipt_lines:
+        raise HTTPException(status_code=400, detail="No valid lines to receive")
+
+    # Create a warehouse_receipt linked to PO
+    today = datetime.now(timezone.utc).strftime("%Y%m%d")
+    rcount = await warehouse_receipts_col.count_documents({"receipt_number": {"$regex": f"^GRN-{today}"}})
+    grn_number = f"GRN-{today}-{rcount + 1:04d}"
+    receipt_doc = {
+        "receipt_number": grn_number,
+        "outlet_id": p["outlet_id"],
+        "supplier_id": p.get("supplier_id"),
+        "supplier_name": p.get("supplier_name"),
+        "po_id": po_id,
+        "po_number": p.get("po_number"),
+        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "lines": receipt_lines,
+        "grand_total": round(grand_total, 2),
+        "notes": req.notes,
+        "status": "posted",
+        "attachments": [],
+        "created_by": current_user["id"],
+        "created_by_name": current_user.get("name", ""),
+        "created_at": now_utc(),
+    }
+    r_res = await warehouse_receipts_col.insert_one(receipt_doc)
+
+    # Apply stock movements
+    for ln in receipt_lines:
+        await _apply_stock_delta(
+            ln["item_id"], p["outlet_id"], float(ln["qty"]),
+            "receipt", grn_number,
+            f"Receipt {grn_number} from PO {p.get('po_number')}: {p.get('supplier_name', '')}",
+            current_user["id"],
+        )
+
+    # Update PO line received_qty
+    updated_lines = []
+    fully_received = True
+    for base_ln in p.get("lines", []):
+        match = next((rl for rl in receipt_lines if rl["item_id"] == base_ln["item_id"]), None)
+        new_rec = float(base_ln.get("received_qty", 0)) + (float(match["qty"]) if match else 0)
+        ln2 = {**base_ln, "received_qty": new_rec}
+        updated_lines.append(ln2)
+        if new_rec < float(base_ln.get("qty", 0)):
+            fully_received = False
+    new_status = "received" if fully_received else "partial_received"
+    await purchase_orders_col.update_one(
+        {"_id": p["_id"]},
+        {"$set": {"lines": updated_lines, "status": new_status, "updated_at": now_utc()}}
+    )
+
+    # Auto-post journal
+    try:
+        journal_result = await post_receipt_journal({**receipt_doc, "_id": r_res.inserted_id}, current_user["id"])
+        jnumber = journal_result.get("journal_number") if journal_result else None
+    except Exception as e:
+        print(f"[post] PO receipt journal err: {e}")
+        jnumber = None
+
+    await log_audit(current_user["id"], "receive", "warehouse", "purchase_order", po_id,
+                    details=f"Received into {grn_number} (Rp {grand_total:,.0f})")
+
+    try:
+        from utils.notification_service import create_notification
+        await create_notification(
+            type="warehouse",
+            title=f"Barang diterima: {grn_number}",
+            body=f"{p.get('po_number')} — {len(receipt_lines)} item, Rp {grand_total:,.0f}{' (PARTIAL)' if not fully_received else ''}",
+            severity="success",
+            outlet_id=p["outlet_id"],
+            portal_scope=["warehouse", "management"],
+            ref_type="warehouse_receipt",
+            ref_id=str(r_res.inserted_id),
+            link="/warehouse/receipts",
+        )
+    except Exception:
+        pass
+
+    return {
+        "ok": True,
+        "receipt_number": grn_number,
+        "journal_number": jnumber,
+        "po_status": new_status,
+        "grand_total": round(grand_total, 2),
+    }
+
+
+# ============================================================================
+# ATTACHMENTS (GridFS)
+# ============================================================================
+from fastapi import File, UploadFile
+from fastapi.responses import StreamingResponse
+import io
+
+
+@router.post("/attachments/upload")
+async def upload_attachment(
+    ref_type: str,
+    ref_id: str,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    """Upload a file attachment (receipt photo, invoice, etc.) and link it to a warehouse record.
+    ref_type: 'receipt' | 'adjustment' | 'purchase_order'
+    """
+    allowed_refs = {
+        "receipt": warehouse_receipts_col,
+        "adjustment": warehouse_adjustments_col,
+        "purchase_order": purchase_orders_col,
+    }
+    if ref_type not in allowed_refs:
+        raise HTTPException(status_code=400, detail=f"Invalid ref_type. Allowed: {list(allowed_refs.keys())}")
+    col = allowed_refs[ref_type]
+    try:
+        parent = await col.find_one({"_id": ObjectId(ref_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid ref_id")
+    if not parent:
+        raise HTTPException(status_code=404, detail=f"{ref_type} not found")
+
+    # Basic validation
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:  # 10 MB limit
+        raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
+
+    metadata = {
+        "ref_type": ref_type,
+        "ref_id": ref_id,
+        "content_type": file.content_type,
+        "original_filename": file.filename,
+        "uploaded_by": current_user["id"],
+        "uploaded_by_name": current_user.get("name", ""),
+        "uploaded_at": now_utc(),
+    }
+    file_id = await gridfs_bucket.upload_from_stream(
+        file.filename, io.BytesIO(content), metadata=metadata,
+    )
+
+    attachment_info = {
+        "file_id": str(file_id),
+        "filename": file.filename,
+        "content_type": file.content_type,
+        "size": len(content),
+        "uploaded_by_name": current_user.get("name", ""),
+        "uploaded_at": metadata["uploaded_at"],
+    }
+
+    await col.update_one({"_id": parent["_id"]}, {"$push": {"attachments": attachment_info}})
+    await log_audit(current_user["id"], "upload", "warehouse", "attachment", str(file_id),
+                    details=f"{ref_type}/{ref_id}: {file.filename} ({len(content)} bytes)")
+
+    return {"ok": True, "attachment": attachment_info}
+
+
+@router.get("/attachments/{file_id}")
+async def download_attachment(file_id: str, current_user: dict = Depends(get_current_user)):
+    """Stream an attachment file back to the client."""
+    try:
+        oid = ObjectId(file_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid id")
+
+    # Read file into memory (small files only)
+    try:
+        grid_out = await gridfs_bucket.open_download_stream(oid)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    content = await grid_out.read()
+    content_type = (grid_out.metadata or {}).get("content_type", "application/octet-stream")
+    filename = grid_out.filename or "file"
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type=content_type,
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
+
+
+@router.delete("/attachments/{file_id}")
+async def delete_attachment(file_id: str, current_user: dict = Depends(get_current_user)):
+    try:
+        oid = ObjectId(file_id)
+        grid_out = await gridfs_bucket.open_download_stream(oid)
+        meta = grid_out.metadata or {}
+        ref_type = meta.get("ref_type")
+        ref_id = meta.get("ref_id")
+        await gridfs_bucket.delete(oid)
+        # unlink from parent doc
+        mapping = {
+            "receipt": warehouse_receipts_col,
+            "adjustment": warehouse_adjustments_col,
+            "purchase_order": purchase_orders_col,
+        }
+        col = mapping.get(ref_type)
+        if col and ref_id:
+            await col.update_one(
+                {"_id": ObjectId(ref_id)},
+                {"$pull": {"attachments": {"file_id": file_id}}}
+            )
+        await log_audit(current_user["id"], "delete", "warehouse", "attachment", file_id, details=f"{ref_type}/{ref_id}")
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+

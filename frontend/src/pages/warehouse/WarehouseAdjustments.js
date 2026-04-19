@@ -11,16 +11,23 @@ import { Badge } from '../../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Settings, Trash2 } from 'lucide-react';
+import { Plus, Settings, Trash2, CheckCircle2, XCircle, AlertTriangle, Paperclip, Upload } from 'lucide-react';
 
 const CATEGORIES = ['manual', 'correction', 'damage', 'theft', 'expired', 'other'];
 
+const STATUS_META = {
+  posted: { label: 'Posted', color: 'border-emerald-500/40 text-emerald-400' },
+  pending_approval: { label: 'Pending Approval', color: 'border-amber-500/40 text-amber-400' },
+  rejected: { label: 'Rejected', color: 'border-rose-500/40 text-rose-400' },
+};
+
 export default function WarehouseAdjustments() {
-  const { currentOutlet } = useAuth();
+  const { currentOutlet, user } = useAuth();
   const { lang } = useLang();
   const [adjustments, setAdjustments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [stock, setStock] = useState([]);
+  const [settings, setSettings] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState({ category: 'manual', reason: '', notes: '', lines: [] });
 
@@ -30,6 +37,11 @@ export default function WarehouseAdjustments() {
     try {
       const res = await api.get('/api/warehouse/adjustments', { params: { outlet_id: currentOutlet, limit: 50 } });
       setAdjustments(res.data.adjustments || []);
+      // Also fetch settings for threshold hint
+      try {
+        const s = await api.get(`/api/warehouse/settings/${currentOutlet}`);
+        setSettings(s.data);
+      } catch { /* silent */ }
     } finally { setLoading(false); }
   }, [currentOutlet]);
 
@@ -52,18 +64,32 @@ export default function WarehouseAdjustments() {
     const valid = form.lines.every(l => l.reason && l.new_qty !== '');
     if (!valid) { toast.error(lang === 'id' ? 'Isi alasan tiap item' : 'Fill reason per line'); return; }
     try {
-      await api.post('/api/warehouse/adjustments', {
+      const res = await api.post('/api/warehouse/adjustments', {
         outlet_id: currentOutlet,
         category: form.category, reason: form.reason,
         notes: form.notes,
         lines: form.lines.map(l => ({ ...l, current_qty: parseFloat(l.current_qty), new_qty: parseFloat(l.new_qty) })),
       });
-      toast.success(lang === 'id' ? 'Adjustment tercatat' : 'Adjustment posted');
+      if (res.data.requires_approval) {
+        toast.warning(`Adjustment ${res.data.adjustment_number} menunggu approval (nilai Rp ${(res.data.total_value_abs || 0).toLocaleString('id-ID')} > threshold)`);
+      } else {
+        toast.success(`Adjustment ${res.data.adjustment_number} tercatat & diposting`);
+      }
       setAddOpen(false);
       setForm({ category: 'manual', reason: '', notes: '', lines: [] });
       load();
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
   };
+
+  const approve = async (id) => {
+    try { await api.post(`/api/warehouse/adjustments/${id}/approve`); toast.success('Adjustment disetujui'); load(); }
+    catch (e) { toast.error(e?.response?.data?.detail || 'Gagal approve'); }
+  };
+  const reject = async (id) => {
+    try { await api.post(`/api/warehouse/adjustments/${id}/reject`); toast.success('Adjustment ditolak'); load(); }
+    catch (e) { toast.error(e?.response?.data?.detail || 'Gagal reject'); }
+  };
+  const canApprove = user?.is_superadmin || (user?.permissions || []).includes('approvals.approve') || (user?.permissions || []).includes('*');
 
   if (!currentOutlet) return <div className="text-center py-20 text-[hsl(var(--muted-foreground))]">{lang === 'id' ? 'Pilih outlet' : 'Select outlet'}</div>;
 
@@ -77,6 +103,13 @@ export default function WarehouseAdjustments() {
         <Button onClick={() => setAddOpen(true)} className="gap-2" data-testid="wh-adj-add"><Plus className="w-4 h-4" />{lang === 'id' ? 'Adjustment Baru' : 'New Adjustment'}</Button>
       </div>
 
+      {settings && (
+        <div className="flex items-center gap-2 p-2.5 rounded-lg border border-cyan-500/30 bg-cyan-500/5 text-xs" data-testid="wh-adj-threshold-hint">
+          <AlertTriangle className="w-3.5 h-3.5 text-cyan-400" />
+          <span className="text-[hsl(var(--muted-foreground))]">Threshold approval outlet ini: <b className="text-cyan-400">Rp {Number(settings.adjustment_approval_threshold || 0).toLocaleString('id-ID')}</b>. Adjustment melebihi nilai ini akan butuh approval.</span>
+        </div>
+      )}
+
       <Card className="bg-[var(--glass-bg)] border-[var(--glass-border)] backdrop-blur-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -87,27 +120,43 @@ export default function WarehouseAdjustments() {
                 <th className="text-left py-2.5 px-4">{lang === 'id' ? 'Kategori' : 'Category'}</th>
                 <th className="text-left py-2.5 px-4">{lang === 'id' ? 'Alasan' : 'Reason'}</th>
                 <th className="text-right py-2.5 px-4">Items</th>
+                <th className="text-right py-2.5 px-4">Value</th>
+                <th className="text-left py-2.5 px-4">Status</th>
                 <th className="text-left py-2.5 px-4">{lang === 'id' ? 'Oleh' : 'By'}</th>
+                <th className="text-right py-2.5 px-4">Aksi</th>
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={6} className="text-center py-10">Loading...</td></tr>}
+              {loading && <tr><td colSpan={9} className="text-center py-10">Loading...</td></tr>}
               {!loading && adjustments.length === 0 && (
-                <tr><td colSpan={6} className="text-center py-10 text-[hsl(var(--muted-foreground))]">
+                <tr><td colSpan={9} className="text-center py-10 text-[hsl(var(--muted-foreground))]">
                   <Settings className="w-8 h-8 mx-auto mb-2 opacity-40" />
                   {lang === 'id' ? 'Belum ada adjustment' : 'No adjustments'}
                 </td></tr>
               )}
-              {adjustments.map(a => (
-                <tr key={a.id} className="border-t border-[var(--glass-border)] hover:bg-[var(--glass-bg-strong)]/50" data-testid={`wh-adj-row-${a.id}`}>
-                  <td className="py-2 px-4 font-mono text-xs">{a.adjustment_number}</td>
-                  <td className="py-2 px-4 text-xs">{a.date}</td>
-                  <td className="py-2 px-4"><Badge variant="outline" className="text-[10px] capitalize border-[var(--glass-border)]">{a.category}</Badge></td>
-                  <td className="py-2 px-4 max-w-xs truncate" title={a.reason}>{a.reason}</td>
-                  <td className="py-2 px-4 text-right">{a.total_items}</td>
-                  <td className="py-2 px-4 text-xs">{a.created_by_name}</td>
-                </tr>
-              ))}
+              {adjustments.map(a => {
+                const meta = STATUS_META[a.status] || { label: a.status || 'posted', color: '' };
+                return (
+                  <tr key={a.id} className="border-t border-[var(--glass-border)] hover:bg-[var(--glass-bg-strong)]/50" data-testid={`wh-adj-row-${a.id}`}>
+                    <td className="py-2 px-4 font-mono text-xs">{a.adjustment_number}</td>
+                    <td className="py-2 px-4 text-xs">{a.date}</td>
+                    <td className="py-2 px-4"><Badge variant="outline" className="text-[10px] capitalize border-[var(--glass-border)]">{a.category}</Badge></td>
+                    <td className="py-2 px-4 max-w-xs truncate" title={a.reason}>{a.reason}</td>
+                    <td className="py-2 px-4 text-right">{a.total_items}</td>
+                    <td className="py-2 px-4 text-right text-xs" style={{ fontVariantNumeric: 'tabular-nums' }}>{a.total_value_abs ? `Rp ${Number(a.total_value_abs).toLocaleString('id-ID')}` : '-'}</td>
+                    <td className="py-2 px-4"><Badge variant="outline" className={`text-[10px] ${meta.color}`}>{meta.label}</Badge></td>
+                    <td className="py-2 px-4 text-xs">{a.created_by_name}</td>
+                    <td className="py-2 px-4 text-right">
+                      {a.status === 'pending_approval' && canApprove && (
+                        <div className="flex justify-end gap-1">
+                          <Button size="sm" variant="ghost" className="h-7 px-2 text-[10px] text-emerald-400" onClick={() => approve(a.id)} data-testid={`wh-adj-approve-${a.id}`}><CheckCircle2 className="w-3 h-3 mr-1" />Approve</Button>
+                          <Button size="sm" variant="ghost" className="h-7 px-2 text-[10px] text-rose-400" onClick={() => reject(a.id)} data-testid={`wh-adj-reject-${a.id}`}><XCircle className="w-3 h-3 mr-1" />Reject</Button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

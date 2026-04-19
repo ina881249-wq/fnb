@@ -77,6 +77,23 @@ async def submit_approval(req: ApprovalRequest, current_user: dict = Depends(get
         "description": req.description,
         "requester": current_user["name"],
     })
+
+    # Notification center: ping approvers (for now, broadcast to management portal + outlet)
+    try:
+        from utils.notification_service import create_notification
+        await create_notification(
+            type="approval",
+            title=f"Approval diminta: {req.type}",
+            body=f"{req.description} (oleh {current_user.get('name', 'user')}{f', Rp {req.amount:,.0f}' if req.amount else ''})",
+            severity="warning",
+            outlet_id=req.outlet_id,
+            portal_scope=["management", "outlet"],
+            ref_type="approval",
+            ref_id=approval_id,
+            link="/management/approvals",
+        )
+    except Exception as e:
+        print(f"[notif] approval notify failed: {e}")
     
     return {"id": approval_id, "message": "Approval submitted"}
 
@@ -112,6 +129,22 @@ async def approve_request(approval_id: str, req: ApprovalAction, current_user: d
         "approval_id": approval_id,
         "approved_by": current_user["name"],
     })
+
+    # Notification to requester
+    try:
+        from utils.notification_service import create_notification
+        await create_notification(
+            type="approval",
+            title="Approval disetujui ✓",
+            body=f"Permintaan Anda ({approval.get('description', '-')}) telah disetujui oleh {current_user.get('name')}",
+            severity="success",
+            user_id=approval.get("requester_id"),
+            ref_type="approval",
+            ref_id=approval_id,
+            link="/management/approvals",
+        )
+    except Exception as e:
+        print(f"[notif] approval approved notify failed: {e}")
     
     return {"message": "Approved successfully"}
 
@@ -147,6 +180,22 @@ async def reject_request(approval_id: str, req: ApprovalAction, current_user: di
         "approval_id": approval_id,
         "rejected_by": current_user["name"],
     })
+
+    # Notification to requester
+    try:
+        from utils.notification_service import create_notification
+        await create_notification(
+            type="approval",
+            title="Approval ditolak ✗",
+            body=f"Permintaan Anda ({approval.get('description', '-')}) ditolak oleh {current_user.get('name')}. Alasan: {req.comment or '-'}",
+            severity="critical",
+            user_id=approval.get("requester_id"),
+            ref_type="approval",
+            ref_id=approval_id,
+            link="/management/approvals",
+        )
+    except Exception as e:
+        print(f"[notif] approval rejected notify failed: {e}")
     
     return {"message": "Rejected"}
 

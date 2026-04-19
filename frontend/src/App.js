@@ -61,6 +61,8 @@ import WarehouseReceiving from './pages/warehouse/WarehouseReceiving';
 import WarehouseTransfers from './pages/warehouse/WarehouseTransfers';
 import WarehouseAdjustments from './pages/warehouse/WarehouseAdjustments';
 import WarehouseCounts from './pages/warehouse/WarehouseCounts';
+import PurchaseOrdersPage from './pages/warehouse/PurchaseOrdersPage';
+import WarehouseSettingsPage from './pages/warehouse/WarehouseSettingsPage';
 import AcceptInvitePage from './pages/AcceptInvitePage';
 import TwoFactorSetupPage from './pages/TwoFactorSetupPage';
 import './App.css';
@@ -169,10 +171,12 @@ function AppRoutes() {
       {/* Warehouse Portal */}
       <Route path="/warehouse" element={<ProtectedRoute><WarehouseLayout /></ProtectedRoute>}>
         <Route path="dashboard" element={<WarehouseDashboard />} />
+        <Route path="purchase-orders" element={<PurchaseOrdersPage />} />
         <Route path="receiving" element={<WarehouseReceiving />} />
         <Route path="transfers" element={<WarehouseTransfers />} />
         <Route path="adjustments" element={<WarehouseAdjustments />} />
         <Route path="counts" element={<WarehouseCounts />} />
+        <Route path="settings" element={<WarehouseSettingsPage />} />
         <Route index element={<Navigate to="dashboard" />} />
       </Route>
 

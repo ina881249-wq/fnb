@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLang } from '../context/LangContext';
 import { Button } from '../components/ui/button';
+import NotificationBell from '../components/common/NotificationBell';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Separator } from '../components/ui/separator';
 import {
@@ -57,7 +58,7 @@ export default function ExecutiveLayout() {
           <Button variant="ghost" size="sm" onClick={toggleTheme} className="h-8 w-8 p-0">
             {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </Button>
-          <Button variant="ghost" size="sm"><Bell className="w-4 h-4" /></Button>
+          <NotificationBell />
           <Separator orientation="vertical" className="h-6 bg-[var(--glass-border)]" />
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-full bg-[hsl(var(--primary))]/20 border border-[hsl(var(--primary))]/30 flex items-center justify-center">

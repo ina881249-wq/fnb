@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLang } from '../context/LangContext';
 import { Button } from '../components/ui/button';
+import NotificationBell from '../components/common/NotificationBell';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
 import {
@@ -81,9 +82,7 @@ export default function OutletLayout() {
             {mobileNavOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
           </Button>
           <div className="hidden sm:flex items-center gap-2">
-            <Button variant="ghost" size="sm" data-testid="outlet-notifications">
-              <Bell className="w-4 h-4" />
-            </Button>
+            <NotificationBell />
             <div className="w-7 h-7 rounded-full bg-[hsl(var(--primary))]/20 border border-[hsl(var(--primary))]/30 flex items-center justify-center">
               <span className="text-[10px] font-semibold text-[hsl(var(--primary))]">{user?.name?.charAt(0)}</span>
             </div>

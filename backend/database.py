@@ -54,7 +54,14 @@ warehouse_receipts_col = db["warehouse_receipts"]
 warehouse_transfers_col = db["warehouse_transfers"]
 warehouse_adjustments_col = db["warehouse_adjustments"]
 warehouse_counts_col = db["warehouse_counts"]
+warehouse_settings_col = db["warehouse_settings"]
+purchase_orders_col = db["purchase_orders"]
+po_lines_col = db["po_lines"]
 suppliers_col = db["suppliers"]
+
+# GridFS for file attachments
+from motor.motor_asyncio import AsyncIOMotorGridFSBucket
+gridfs_bucket = AsyncIOMotorGridFSBucket(db, bucket_name="attachments")
 
 async def create_indexes():
     await users_col.create_index("email", unique=True)

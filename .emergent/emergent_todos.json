@@ -1,6 +1,14 @@
 [
   {
-    "content": "T2.1-Plus Finance Reports Excellence — COMPLETE (98% test pass, 16/16 frontend features)",
+    "content": "T2.3 Notification Center — COMPLETE",
     "status": "completed"
+  },
+  {
+    "content": "T2.2a-e Advanced Warehouse Workflows — COMPLETE (PO, threshold, attachments, settings)",
+    "status": "completed"
+  },
+  {
+    "content": "Test T2.3 + T2.2 end-to-end via testing agent",
+    "status": "in_progress"
   }
 ]

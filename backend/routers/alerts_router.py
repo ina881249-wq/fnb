@@ -190,6 +190,25 @@ async def generate_alerts(current_user: dict = Depends(get_current_user)):
             "count": len(generated),
             "alerts": generated[:5],
         })
+        # Emit notification center entries for each newly generated alert
+        try:
+            from utils.notification_service import create_notification
+            # Replay newly inserted alerts (those matching recent timestamps)
+            async for a in alerts_col.find({"resolved": False}).sort("created_at", -1).limit(len(generated)):
+                sev_map = {"critical": "critical", "high": "warning", "medium": "warning", "low": "info"}
+                await create_notification(
+                    type="alert",
+                    title=a.get("title", "Alert"),
+                    body=a.get("description", ""),
+                    severity=sev_map.get(a.get("priority"), "warning"),
+                    outlet_id=a.get("outlet_id"),
+                    portal_scope=["management", "outlet", "executive"],
+                    ref_type="alert",
+                    ref_id=str(a["_id"]),
+                    link="/management/alerts",
+                )
+        except Exception as e:
+            print(f"[notif] alerts notify failed: {e}")
     
     return {"generated": len(generated), "alerts": generated}
 
